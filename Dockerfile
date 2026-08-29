@@ -3,6 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install OpenSSL and compat libraries for Prisma on Alpine
+RUN apk add --no-cache openssl libc6-compat
+
 # Copy root manifest and workspace configurations
 COPY package*.json ./
 COPY tsconfig.base.json ./
@@ -24,6 +27,9 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=4000
+
+# Install OpenSSL runtime dependency for Prisma engines
+RUN apk add --no-cache openssl libc6-compat
 
 # Copy runtime files
 COPY --from=builder /app/package*.json ./
