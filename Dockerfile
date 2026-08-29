@@ -15,9 +15,13 @@ COPY prisma ./prisma/
 COPY packages ./packages/
 COPY apps/api ./apps/api/
 
-# Install dependencies and generate Prisma client
+# Install dependencies and build monorepo packages
 RUN npm ci
 RUN npx prisma generate
+RUN npm run build --workspace=@chronos/shared
+RUN npm run build --workspace=@chronos/solver
+RUN npm run build --workspace=@chronos/nl-parser
+RUN npm run build --workspace=@chronos/api
 
 EXPOSE 4000
 
