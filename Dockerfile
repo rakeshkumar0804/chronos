@@ -25,4 +25,4 @@ RUN npm run build --workspace=@chronos/api
 EXPOSE 4000
 
 # Push schema to Neon, seed institutional data, and start API server
-CMD ["sh", "-c", "npx prisma db push && npx tsx prisma/seed.ts && npx tsx apps/api/src/index.ts"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && npx tsx prisma/seed.ts && npx tsx apps/api/src/index.ts"]
