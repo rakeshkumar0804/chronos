@@ -1,3 +1,5 @@
+process.env.CHRONOS_ALLOW_SEED_MUTATION = "true";
+
 import {
   PrismaClient,
   CourseType,
@@ -6,6 +8,7 @@ import {
 } from "@prisma/client";
 
 const prisma = new PrismaClient();
+const XYZ_INSTITUTE_WORKSPACE = "xyz-institute-demo";
 
 // 1. Institute Data
 const instituteData = {
@@ -105,9 +108,9 @@ const days: DayOfWeek[] = [
 ];
 
 async function main(): Promise<void> {
-  const existingCourses = await prisma.course.count();
+  const existingCourses = await prisma.course.count({ where: { workspaceId: XYZ_INSTITUTE_WORKSPACE } });
   if (existingCourses > 0) {
-    console.log(`CHRONOS database already initialized with ${existingCourses} courses. Preserving all existing records and custom entities.`);
+    console.log(`CHRONOS database already initialized with ${existingCourses} courses for ${XYZ_INSTITUTE_WORKSPACE}. Preserving institutional records.`);
     return;
   }
 
@@ -149,6 +152,7 @@ async function main(): Promise<void> {
       prisma.room.create({
         data: {
           ...room,
+          workspaceId: XYZ_INSTITUTE_WORKSPACE,
           instituteId: institute.id,
         },
       })
@@ -162,6 +166,7 @@ async function main(): Promise<void> {
       prisma.faculty.create({
         data: {
           ...fac,
+          workspaceId: XYZ_INSTITUTE_WORKSPACE,
           instituteId: institute.id,
         },
       })
@@ -181,6 +186,7 @@ async function main(): Promise<void> {
       prisma.course.create({
         data: {
           ...course,
+          workspaceId: XYZ_INSTITUTE_WORKSPACE,
           instituteId: institute.id,
         },
       })
@@ -210,6 +216,7 @@ async function main(): Promise<void> {
 
       await prisma.facultyCourseAssignment.create({
         data: {
+          workspaceId: XYZ_INSTITUTE_WORKSPACE,
           facultyId: fac.id,
           courseId: course.id,
         },
@@ -219,33 +226,23 @@ async function main(): Promise<void> {
   }
   console.log(`Created ${assignmentCount} Faculty-Course Assignments.`);
 
-  // 8. Generate TimeSlots (6 days x 8 slots = 48 slots)
-  const timeSlotEntries: Array<{
-    day: DayOfWeek;
-    startTime: string;
-    endTime: string;
-    isBreak: boolean;
-    breakLabel?: string | null;
-  }> = [];
-
+  // 8. Create TimeSlots (Mon–Sat)
+  let slotCount = 0;
   for (const day of days) {
     for (const slot of timeSlotTemplates) {
-      timeSlotEntries.push({
-        day,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        isBreak: slot.isBreak,
-        breakLabel: slot.breakLabel || null,
+      await prisma.timeSlot.create({
+        data: {
+          day,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          isBreak: slot.isBreak,
+          breakLabel: slot.breakLabel,
+        },
       });
+      slotCount++;
     }
   }
-
-  await prisma.timeSlot.createMany({
-    data: timeSlotEntries,
-  });
-  console.log(`Created ${timeSlotEntries.length} TimeSlots across Monday to Saturday.`);
-
-  console.log("Seeding completed successfully without errors.");
+  console.log(`Created ${slotCount} Time Slots.`);
 }
 
 main()

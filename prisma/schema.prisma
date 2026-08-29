@@ -50,7 +50,8 @@ model Institute {
 
 model Course {
   id           String                    @id @default(uuid())
-  code         String                    @unique
+  workspaceId  String
+  code         String
   name         String
   shortCode    String
   type         CourseType
@@ -63,14 +64,17 @@ model Course {
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
 
+  @@unique([workspaceId, code])
+  @@index([workspaceId])
   @@map("courses")
 }
 
 model Faculty {
   id           String                    @id @default(uuid())
-  shortCode    String                    @unique
+  workspaceId  String
+  shortCode    String
   fullName     String
-  email        String                    @unique
+  email        String
   isCustom     Boolean                   @default(false)
   instituteId  String?
   institute    Institute?                @relation(fields: [instituteId], references: [id], onDelete: SetNull)
@@ -79,12 +83,16 @@ model Faculty {
   createdAt    DateTime                  @default(now())
   updatedAt    DateTime                  @updatedAt
 
+  @@unique([workspaceId, shortCode])
+  @@unique([workspaceId, email])
+  @@index([workspaceId])
   @@map("faculties")
 }
 
 model FacultyCourseAssignment {
   facultyId   String
   courseId    String
+  workspaceId String
   isCustom    Boolean  @default(false)
   assignedAt  DateTime @default(now())
 
@@ -92,12 +100,14 @@ model FacultyCourseAssignment {
   course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@id([facultyId, courseId])
+  @@index([workspaceId])
   @@map("faculty_course_assignments")
 }
 
 model Room {
   id          String          @id @default(uuid())
-  roomNo      String          @unique
+  workspaceId String
+  roomNo      String
   type        RoomType
   capacity    Int?
   isCustom    Boolean         @default(false)
@@ -107,6 +117,8 @@ model Room {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
+  @@unique([workspaceId, roomNo])
+  @@index([workspaceId])
   @@map("rooms")
 }
 
@@ -140,22 +152,24 @@ model TimeSlot {
 }
 
 model ScheduleEntry {
-  id         String    @id @default(uuid())
-  courseId   String
-  facultyId  String
-  roomId     String
-  divisionId String
-  timeSlotId String
+  id          String    @id @default(uuid())
+  workspaceId String
+  courseId    String
+  facultyId   String
+  roomId      String
+  divisionId  String
+  timeSlotId  String
 
-  course     Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  faculty    Faculty   @relation(fields: [facultyId], references: [id], onDelete: Cascade)
-  room       Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  division   Division  @relation(fields: [divisionId], references: [id], onDelete: Cascade)
-  timeSlot   TimeSlot  @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  faculty     Faculty   @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  room        Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  division    Division  @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  timeSlot    TimeSlot  @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
 
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
+  @@index([workspaceId])
   @@index([courseId])
   @@index([facultyId])
   @@index([roomId])

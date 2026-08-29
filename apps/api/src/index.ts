@@ -1,15 +1,14 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { PrismaClient } from "@prisma/client";
 import { solve } from "@chronos/solver";
 import constraintsRouter from "./routes/constraints.js";
 import adminRouter from "./routes/admin.js";
+import { prisma, XYZ_INSTITUTE_WORKSPACE } from "./db.js";
 
 dotenv.config();
 
 const app = express();
-const prisma = new PrismaClient();
 const port = process.env.PORT || 4000;
 
 app.use(cors());
@@ -40,14 +39,24 @@ app.get("/api/health", (_req: Request, res: Response) => {
   res.json({ status: "ok" });
 });
 
-app.get("/api/data", async (_req: Request, res: Response) => {
+app.get("/api/data", async (req: Request, res: Response) => {
   try {
+    const rawWs =
+      (req.headers["x-workspace-id"] as string) ||
+      (req.query.workspaceId as string) ||
+      (req.query.workspace as string);
+
+    const workspaceId =
+      rawWs === "INSTITUTIONAL" || rawWs === XYZ_INSTITUTE_WORKSPACE || !rawWs
+        ? XYZ_INSTITUTE_WORKSPACE
+        : rawWs.trim();
+
     const [courses, faculty, facultyCourseAssignments, rooms, divisions, timeSlots] =
       await Promise.all([
-        prisma.course.findMany({ orderBy: { code: "asc" } }),
-        prisma.faculty.findMany({ orderBy: { shortCode: "asc" } }),
-        prisma.facultyCourseAssignment.findMany(),
-        prisma.room.findMany({ orderBy: { roomNo: "asc" } }),
+        prisma.course.findMany({ where: { workspaceId }, orderBy: { code: "asc" } }),
+        prisma.faculty.findMany({ where: { workspaceId }, orderBy: { shortCode: "asc" } }),
+        prisma.facultyCourseAssignment.findMany({ where: { workspaceId } }),
+        prisma.room.findMany({ where: { workspaceId }, orderBy: { roomNo: "asc" } }),
         prisma.division.findMany({ orderBy: { name: "asc" } }),
         prisma.timeSlot.findMany({ orderBy: [{ day: "asc" }, { startTime: "asc" }] }),
       ]);
@@ -69,13 +78,21 @@ app.get("/api/data", async (_req: Request, res: Response) => {
 app.post("/api/solve", async (req: Request, res: Response) => {
   try {
     const { enableTrace = false } = req.body || {};
+    const rawWs =
+      (req.headers["x-workspace-id"] as string) ||
+      (req.body?.workspaceId as string);
+
+    const workspaceId =
+      rawWs === "INSTITUTIONAL" || rawWs === XYZ_INSTITUTE_WORKSPACE || !rawWs
+        ? XYZ_INSTITUTE_WORKSPACE
+        : rawWs.trim();
 
     const [courses, faculty, facultyCourseAssignments, rooms, divisions, timeSlots] =
       await Promise.all([
-        prisma.course.findMany(),
-        prisma.faculty.findMany(),
-        prisma.facultyCourseAssignment.findMany(),
-        prisma.room.findMany(),
+        prisma.course.findMany({ where: { workspaceId } }),
+        prisma.faculty.findMany({ where: { workspaceId } }),
+        prisma.facultyCourseAssignment.findMany({ where: { workspaceId } }),
+        prisma.room.findMany({ where: { workspaceId } }),
         prisma.division.findMany(),
         prisma.timeSlot.findMany(),
       ]);
@@ -99,10 +116,8 @@ app.post("/api/solve", async (req: Request, res: Response) => {
   }
 });
 
-if (process.env.NODE_ENV !== "test") {
-  app.listen(Number(port), "0.0.0.0", () => {
-    console.log(`[CHRONOS API] Server running on http://0.0.0.0:${port}`);
-  });
-}
+app.listen(port, () => {
+  console.log(`[CHRONOS API] Server initialized on http://localhost:${port}`);
+});
 
 export default app;

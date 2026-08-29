@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Plus, UserPlus, DoorOpen, BookOpen, RotateCcw, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { getVisitorWorkspaceId } from "../utils/workspace.js";
 
 interface FacultyItem {
   id: string;
@@ -85,13 +86,16 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
     try {
       const res = await fetch(`${API_BASE}/api/admin/faculty`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Workspace-Id": getVisitorWorkspaceId(),
+        },
         body: JSON.stringify(facultyForm),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to add faculty");
 
-      setStatusMessage({ type: "SUCCESS", text: `Faculty "${data.faculty.fullName}" created.` });
+      setStatusMessage({ type: "SUCCESS", text: `Faculty "${data.faculty.fullName}" created in your private workspace.` });
       setFacultyForm({ shortCode: "", fullName: "", email: "" });
       onDataRefreshed();
     } catch (err: any) {
@@ -110,13 +114,16 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
     try {
       const res = await fetch(`${API_BASE}/api/admin/room`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Workspace-Id": getVisitorWorkspaceId(),
+        },
         body: JSON.stringify(roomForm),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to add room");
 
-      setStatusMessage({ type: "SUCCESS", text: `Room "${data.room.roomNo}" created.` });
+      setStatusMessage({ type: "SUCCESS", text: `Room "${data.room.roomNo}" created in your private workspace.` });
       setRoomForm({ roomNo: "", type: "LECTURE_ROOM", capacity: 60 });
       onDataRefreshed();
     } catch (err: any) {
@@ -139,13 +146,16 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
     try {
       const res = await fetch(`${API_BASE}/api/admin/course`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Workspace-Id": getVisitorWorkspaceId(),
+        },
         body: JSON.stringify(courseForm),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to add course");
 
-      setStatusMessage({ type: "SUCCESS", text: `Course "${data.course.name} (${data.course.shortCode})" created.` });
+      setStatusMessage({ type: "SUCCESS", text: `Course "${data.course.name} (${data.course.shortCode})" created in your private workspace.` });
       setCourseForm({
         code: "",
         name: "",
@@ -170,13 +180,16 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
     try {
       const res = await fetch(`${API_BASE}/api/admin/reset-custom`, {
         method: "DELETE",
+        headers: {
+          "X-Workspace-Id": getVisitorWorkspaceId(),
+        },
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to reset custom data");
 
       setStatusMessage({
         type: "SUCCESS",
-        text: `Reset complete. Deleted ${data.deleted.courses} courses, ${data.deleted.faculty} faculty, ${data.deleted.rooms} rooms. Verified benchmark intact.`,
+        text: `Reset complete. Custom entities purged from your workspace.`,
       });
       onDataRefreshed();
     } catch (err: any) {

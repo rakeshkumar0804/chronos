@@ -68,10 +68,10 @@ export function useSolverWorker() {
   const [searchTree, setSearchTree] = useState<VisualizerNode>(treeRootRef.current);
   const [activeNodeId, setActiveNodeId] = useState<string>("ROOT");
 
-  const resetTree = useCallback(() => {
+  const resetTree = useCallback((rootName: string = "XYZ Institute CSP Root") => {
     const newRoot: VisualizerNode = {
       id: "ROOT",
-      name: "XYZ Institute CSP Root",
+      name: rootName,
       status: "ROOT",
       depth: 0,
       children: [],
@@ -240,9 +240,9 @@ export function useSolverWorker() {
     };
   }, []);
 
-  const start = useCallback((problem: SolverInput, options?: SolverOptions) => {
+  const start = useCallback((problem: SolverInput, options?: SolverOptions, rootName?: string) => {
     if (!workerRef.current) return;
-    resetTree();
+    resetTree(rootName);
     setAssignments(new Map());
     setActiveConflicts([]);
     setFinalSchedule([]);
@@ -279,10 +279,10 @@ export function useSolverWorker() {
     workerRef.current.postMessage({ type: "SET_SPEED", speed: newSpeed } as WorkerInMessage);
   }, []);
 
-  const reset = useCallback(() => {
+  const reset = useCallback((rootName?: string) => {
     if (!workerRef.current) return;
     workerRef.current.postMessage({ type: "ABORT" } as WorkerInMessage);
-    resetTree();
+    resetTree(rootName);
     setAssignments(new Map());
     setActiveConflicts([]);
     setFinalSchedule([]);

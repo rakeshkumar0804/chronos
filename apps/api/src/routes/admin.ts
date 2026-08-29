@@ -1,12 +1,38 @@
 import { Router, Request, Response } from "express";
-import { PrismaClient, CourseType, RoomType } from "@prisma/client";
+import { CourseType, RoomType } from "@prisma/client";
+import { prisma, XYZ_INSTITUTE_WORKSPACE } from "../db.js";
 
 const router = Router();
-const prisma = new PrismaClient();
 
-// 1. POST /api/admin/faculty - Add custom faculty
-router.post("/faculty", async (req: Request, res: Response) => {
+// Helper to extract visitor workspace ID from request
+export function getRequestWorkspaceId(req: Request): string {
+  const h = (req.headers["x-workspace-id"] as string)?.trim();
+  const q = ((req.query.workspaceId || req.query.workspace) as string)?.trim();
+  const b = (req.body?.workspaceId as string)?.trim();
+
+  const candidate = h || q || b || "";
+  if (!candidate || candidate === "INSTITUTIONAL" || candidate === XYZ_INSTITUTE_WORKSPACE) {
+    return XYZ_INSTITUTE_WORKSPACE;
+  }
+  return candidate;
+}
+
+// Middleware: Strict hard protection of XYZ Institute benchmark workspace
+function enforceProtectedWorkspaceGuard(req: Request, res: Response, next: () => void) {
+  const wsId = getRequestWorkspaceId(req);
+  if (wsId === XYZ_INSTITUTE_WORKSPACE || !wsId) {
+    return res.status(403).json({
+      success: false,
+      error: `Forbidden: Cannot mutate or delete protected benchmark workspace "${XYZ_INSTITUTE_WORKSPACE}". Please provide a valid custom X-Workspace-Id header.`,
+    });
+  }
+  next();
+}
+
+// 1. POST /api/admin/faculty - Add custom faculty in visitor workspace
+router.post("/faculty", enforceProtectedWorkspaceGuard, async (req: Request, res: Response) => {
   try {
+    const workspaceId = getRequestWorkspaceId(req);
     const { shortCode, fullName, email } = req.body;
 
     if (!shortCode?.trim() || !fullName?.trim() || !email?.trim()) {
@@ -20,30 +46,41 @@ router.post("/faculty", async (req: Request, res: Response) => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanFullName = fullName.trim();
 
-    // Check duplicate shortCode
+    // Check duplicate shortCode in this workspace
     const existingCode = await prisma.faculty.findUnique({
-      where: { shortCode: cleanShortCode },
+      where: {
+        workspaceId_shortCode: {
+          workspaceId,
+          shortCode: cleanShortCode,
+        },
+      },
     });
     if (existingCode) {
       return res.status(409).json({
         success: false,
-        error: `Faculty with short code "${cleanShortCode}" already exists.`,
+        error: `Faculty with short code "${cleanShortCode}" already exists in your workspace.`,
       });
     }
 
-    // Check duplicate email
+    // Check duplicate email in this workspace
     const existingEmail = await prisma.faculty.findUnique({
-      where: { email: cleanEmail },
+      where: {
+        workspaceId_email: {
+          workspaceId,
+          email: cleanEmail,
+        },
+      },
     });
     if (existingEmail) {
       return res.status(409).json({
         success: false,
-        error: `Faculty with email "${cleanEmail}" already exists.`,
+        error: `Faculty with email "${cleanEmail}" already exists in your workspace.`,
       });
     }
 
     const faculty = await prisma.faculty.create({
       data: {
+        workspaceId,
         shortCode: cleanShortCode,
         fullName: cleanFullName,
         email: cleanEmail,
@@ -58,9 +95,10 @@ router.post("/faculty", async (req: Request, res: Response) => {
   }
 });
 
-// 2. POST /api/admin/room - Add custom room
-router.post("/room", async (req: Request, res: Response) => {
+// 2. POST /api/admin/room - Add custom room in visitor workspace
+router.post("/room", enforceProtectedWorkspaceGuard, async (req: Request, res: Response) => {
   try {
+    const workspaceId = getRequestWorkspaceId(req);
     const { roomNo, type, capacity } = req.body;
 
     if (!roomNo?.trim()) {
@@ -80,17 +118,23 @@ router.post("/room", async (req: Request, res: Response) => {
     }
 
     const existingRoom = await prisma.room.findUnique({
-      where: { roomNo: cleanRoomNo },
+      where: {
+        workspaceId_roomNo: {
+          workspaceId,
+          roomNo: cleanRoomNo,
+        },
+      },
     });
     if (existingRoom) {
       return res.status(409).json({
         success: false,
-        error: `Room "${cleanRoomNo}" already exists.`,
+        error: `Room "${cleanRoomNo}" already exists in your workspace.`,
       });
     }
 
     const room = await prisma.room.create({
       data: {
+        workspaceId,
         roomNo: cleanRoomNo,
         type: type as RoomType,
         capacity: capacity ? Number(capacity) : 60,
@@ -105,9 +149,10 @@ router.post("/room", async (req: Request, res: Response) => {
   }
 });
 
-// 3. POST /api/admin/course - Add custom course with faculty assignments
-router.post("/course", async (req: Request, res: Response) => {
+// 3. POST /api/admin/course - Add custom course with faculty assignments in visitor workspace
+router.post("/course", enforceProtectedWorkspaceGuard, async (req: Request, res: Response) => {
   try {
+    const workspaceId = getRequestWorkspaceId(req);
     const { code, name, shortCode, type, weeklyHours, facultyShortCodes } = req.body;
 
     if (!code?.trim() || !name?.trim() || !shortCode?.trim()) {
@@ -143,125 +188,121 @@ router.post("/course", async (req: Request, res: Response) => {
       });
     }
 
-    // Check duplicate course code
+    // Check duplicate course code within visitor workspace
     const existingCourse = await prisma.course.findUnique({
-      where: { code: cleanCode },
+      where: {
+        workspaceId_code: {
+          workspaceId,
+          code: cleanCode,
+        },
+      },
     });
     if (existingCourse) {
       return res.status(409).json({
         success: false,
-        error: `Course code "${cleanCode}" already exists.`,
+        error: `Course with code "${cleanCode}" already exists in your workspace.`,
       });
     }
 
-    // Validate faculty exist
-    const faculties = await prisma.faculty.findMany({
+    // Validate faculty in this workspace (or fallback to institutional faculty if none in visitor workspace)
+    const upperCodes = facultyShortCodes.map((s: string) => s.trim().toUpperCase());
+    const matchedFaculty = await prisma.faculty.findMany({
       where: {
-        shortCode: { in: facultyShortCodes.map((s: string) => s.trim().toUpperCase()) },
+        workspaceId: { in: [workspaceId, XYZ_INSTITUTE_WORKSPACE] },
+        shortCode: { in: upperCodes },
       },
     });
 
-    if (faculties.length !== facultyShortCodes.length) {
-      const foundCodes = faculties.map((f) => f.shortCode);
-      const missing = facultyShortCodes.filter((s) => !foundCodes.includes(s.trim().toUpperCase()));
-      return res.status(404).json({
+    if (matchedFaculty.length === 0) {
+      return res.status(400).json({
         success: false,
-        error: `Faculty short codes not found: ${missing.join(", ")}`,
+        error: `None of the assigned faculty (${upperCodes.join(", ")}) exist in the database. Please add them first.`,
       });
     }
 
-    // Create course and faculty assignments in transaction
-    const result = await prisma.$transaction(async (tx) => {
-      const newCourse = await tx.course.create({
-        data: {
-          code: cleanCode,
-          name: cleanName,
-          shortCode: cleanShortCode,
-          type: type as CourseType,
-          weeklyHours: numHours,
-          isCustom: true,
-        },
-      });
-
-      const assignments = await Promise.all(
-        faculties.map((f) =>
-          tx.facultyCourseAssignment.create({
-            data: {
-              courseId: newCourse.id,
-              facultyId: f.id,
-              isCustom: true,
-            },
-          })
-        )
-      );
-
-      return { course: newCourse, assignments };
+    // Create course
+    const course = await prisma.course.create({
+      data: {
+        workspaceId,
+        code: cleanCode,
+        name: cleanName,
+        shortCode: cleanShortCode,
+        type: type as CourseType,
+        weeklyHours: numHours,
+        isCustom: true,
+      },
     });
 
-    res.status(201).json({ success: true, ...result });
+    // Create assignments
+    const assignments = await Promise.all(
+      matchedFaculty.map((fac) =>
+        prisma.facultyCourseAssignment.create({
+          data: {
+            workspaceId,
+            courseId: course.id,
+            facultyId: fac.id,
+            isCustom: true,
+          },
+        })
+      )
+    );
+
+    res.status(201).json({
+      success: true,
+      course,
+      assignmentsCount: assignments.length,
+      assignedFaculty: matchedFaculty.map((f) => f.shortCode),
+    });
   } catch (error: any) {
     console.error("Admin add course error:", error);
     res.status(500).json({ success: false, error: error.message || "Failed to create course." });
   }
 });
 
-// 4. DELETE /api/admin/reset-custom - Deletes only custom records without touching seeded dataset
-router.delete("/reset-custom", async (_req: Request, res: Response) => {
+// 4. DELETE /api/admin/reset-custom - Delete custom entities in visitor workspace
+router.delete("/reset-custom", enforceProtectedWorkspaceGuard, async (req: Request, res: Response) => {
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const deletedAssignments = await tx.facultyCourseAssignment.deleteMany({
-        where: { isCustom: true },
-      });
-      const deletedCourses = await tx.course.deleteMany({
-        where: { isCustom: true },
-      });
-      const deletedRooms = await tx.room.deleteMany({
-        where: { isCustom: true },
-      });
-      const deletedFaculty = await tx.faculty.deleteMany({
-        where: { isCustom: true },
-      });
+    const workspaceId = getRequestWorkspaceId(req);
 
-      return {
+    // Delete custom assignments
+    const deletedAssignments = await prisma.facultyCourseAssignment.deleteMany({
+      where: { workspaceId },
+    });
+
+    // Delete custom schedule entries
+    const deletedSchedules = await prisma.scheduleEntry.deleteMany({
+      where: { workspaceId },
+    });
+
+    // Delete custom courses
+    const deletedCourses = await prisma.course.deleteMany({
+      where: { workspaceId },
+    });
+
+    // Delete custom faculty
+    const deletedFaculty = await prisma.faculty.deleteMany({
+      where: { workspaceId },
+    });
+
+    // Delete custom rooms
+    const deletedRooms = await prisma.room.deleteMany({
+      where: { workspaceId },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Reset complete for workspace "${workspaceId}".`,
+      purged: {
         assignments: deletedAssignments.count,
+        schedules: deletedSchedules.count,
         courses: deletedCourses.count,
-        rooms: deletedRooms.count,
         faculty: deletedFaculty.count,
-      };
-    });
-
-    res.json({
-      success: true,
-      message: "Reset custom dataset successfully. Verified benchmark dataset intact.",
-      deleted: result,
+        rooms: deletedRooms.count,
+      },
     });
   } catch (error: any) {
-    console.error("Admin reset custom error:", error);
-    res.status(500).json({ success: false, error: error.message || "Failed to reset custom records." });
-  }
-});
-
-// 5. GET /api/admin/custom-stats - List custom entities added in current session
-router.get("/custom-stats", async (_req: Request, res: Response) => {
-  try {
-    const [customCourses, customFaculty, customRooms] = await Promise.all([
-      prisma.course.findMany({
-        where: { isCustom: true },
-        include: { assignments: { include: { faculty: true } } },
-      }),
-      prisma.faculty.findMany({ where: { isCustom: true } }),
-      prisma.room.findMany({ where: { isCustom: true } }),
-    ]);
-
-    res.json({
-      success: true,
-      customCourses,
-      customFaculty,
-      customRooms,
-    });
-  } catch (error: any) {
-    console.error("Admin custom stats error:", error);
-    res.status(500).json({ success: false, error: error.message || "Failed to fetch custom stats." });
+    console.error("Admin reset error:", error);
+    res.status(500).json({ success: false, error: error.message || "Failed to reset custom entities." });
   }
 });
 

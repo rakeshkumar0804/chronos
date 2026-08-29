@@ -7,14 +7,17 @@ import { TimetableGrid } from "./components/TimetableGrid.js";
 import { MetricsBar } from "./components/MetricsBar.js";
 import { PlaybackControls } from "./components/PlaybackControls.js";
 import { ConstraintStudio } from "./components/ConstraintStudio.js";
-import { CheckCircle, XCircle, GitGraph, Calendar, Activity } from "lucide-react";
+import { CheckCircle, XCircle, GitGraph, Calendar, Activity, AlertTriangle } from "lucide-react";
 import confetti from "canvas-confetti";
 
 import { QuickAddPanel } from "./components/QuickAddPanel.js";
-
 import { FALLBACK_DATASET } from "./data/fallbackDataset.js";
+import { getVisitorWorkspaceId, XYZ_INSTITUTE_WORKSPACE } from "./utils/workspace.js";
 
 export const App: React.FC = () => {
+  const [workspace, setWorkspace] = useState<"INSTITUTIONAL" | "CUSTOM">("INSTITUTIONAL");
+  const [visitorWsId] = useState<string>(() => getVisitorWorkspaceId());
+
   const [dataset, setDataset] = useState<Omit<SolverInput, "constraints">>(FALLBACK_DATASET);
   const [activeConstraints, setActiveConstraints] = useState<Constraint[]>([]);
   const [activeTab, setActiveTab] = useState<"TREE" | "GRID">("TREE");
@@ -41,20 +44,25 @@ export const App: React.FC = () => {
 
   const API_BASE = import.meta.env.VITE_API_URL || "https://chronos-p8hf.onrender.com";
 
-  const fetchData = () => {
-    fetch(`${API_BASE}/api/data`)
+  const fetchData = (targetWorkspace: "INSTITUTIONAL" | "CUSTOM" = workspace) => {
+    const wsHeader = targetWorkspace === "INSTITUTIONAL" ? XYZ_INSTITUTE_WORKSPACE : visitorWsId;
+    fetch(`${API_BASE}/api/data`, {
+      headers: {
+        "X-Workspace-Id": wsHeader,
+      },
+    })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         return res.json();
       })
       .then((data) => {
         setDataset({
-          courses: data.courses,
-          faculty: data.faculty,
-          facultyCourseAssignments: data.facultyCourseAssignments,
-          rooms: data.rooms,
-          divisions: data.divisions,
-          timeSlots: data.timeSlots,
+          courses: data.courses || [],
+          faculty: data.faculty || [],
+          facultyCourseAssignments: data.facultyCourseAssignments || [],
+          rooms: data.rooms || [],
+          divisions: data.divisions || FALLBACK_DATASET.divisions,
+          timeSlots: data.timeSlots || FALLBACK_DATASET.timeSlots,
         });
         setApiError(null);
         setIsLoading(false);
@@ -66,21 +74,74 @@ export const App: React.FC = () => {
       });
   };
 
-  // Load institutional dataset from PostgreSQL backend
+  // Re-fetch and reset tree when active workspace changes
   useEffect(() => {
-    fetchData();
-  }, []);
+    const rootName =
+      workspace === "INSTITUTIONAL"
+        ? "XYZ Institute CSP Root (46 Sessions)"
+        : `My Workspace CSP Root (${activeDataset.courses.length} Courses, ${totalVariables} Sessions)`;
+    reset(rootName);
+    fetchData(workspace);
+  }, [workspace]);
+
+  // Active dataset is strictly scoped to the active workspace
+  const activeDataset = useMemo(() => {
+    if (workspace === "INSTITUTIONAL") {
+      return {
+        courses: dataset.courses.filter(
+          (c: any) => c.workspaceId === XYZ_INSTITUTE_WORKSPACE || (!c.workspaceId && !c.isCustom)
+        ),
+        faculty: dataset.faculty.filter(
+          (f: any) => f.workspaceId === XYZ_INSTITUTE_WORKSPACE || (!f.workspaceId && !f.isCustom)
+        ),
+        facultyCourseAssignments: dataset.facultyCourseAssignments.filter(
+          (a: any) => a.workspaceId === XYZ_INSTITUTE_WORKSPACE || (!a.workspaceId && !a.isCustom)
+        ),
+        rooms: dataset.rooms.filter(
+          (r: any) => r.workspaceId === XYZ_INSTITUTE_WORKSPACE || (!r.workspaceId && !r.isCustom)
+        ),
+        divisions: dataset.divisions && dataset.divisions.length > 0 ? dataset.divisions : FALLBACK_DATASET.divisions,
+        timeSlots: dataset.timeSlots && dataset.timeSlots.length > 0 ? dataset.timeSlots : FALLBACK_DATASET.timeSlots,
+      };
+    }
+
+    // STRICT ISOLATION FOR VISITOR WORKSPACE
+    const customCourses = dataset.courses.filter(
+      (c: any) => c.workspaceId === visitorWsId || (c.isCustom && c.workspaceId !== XYZ_INSTITUTE_WORKSPACE)
+    );
+    const customCourseIds = new Set(customCourses.map((c: any) => c.id));
+
+    const customAssignments = dataset.facultyCourseAssignments.filter(
+      (a: any) => a.workspaceId === visitorWsId || customCourseIds.has(a.courseId)
+    );
+    const assignedFacultyIds = new Set(customAssignments.map((a: any) => a.facultyId));
+
+    const customFaculty = dataset.faculty.filter(
+      (f: any) => f.workspaceId === visitorWsId || assignedFacultyIds.has(f.id) || f.isCustom
+    );
+
+    const customRooms = dataset.rooms.filter(
+      (r: any) => r.workspaceId === visitorWsId || (r.isCustom && r.workspaceId !== XYZ_INSTITUTE_WORKSPACE)
+    );
+
+    return {
+      courses: customCourses,
+      faculty: customFaculty.length > 0 ? customFaculty : dataset.faculty,
+      facultyCourseAssignments: customAssignments,
+      rooms: customRooms.length > 0 ? customRooms : FALLBACK_DATASET.rooms,
+      divisions: dataset.divisions && dataset.divisions.length > 0 ? dataset.divisions : FALLBACK_DATASET.divisions,
+      timeSlots: dataset.timeSlots && dataset.timeSlots.length > 0 ? dataset.timeSlots : FALLBACK_DATASET.timeSlots,
+    };
+  }, [dataset, workspace, visitorWsId]);
 
   const totalVariables = useMemo(() => {
-    if (!dataset) return 46;
-    const totalWeeklyHours = dataset.courses.reduce((acc: number, c: { weeklyHours: number }) => acc + c.weeklyHours, 0);
-    return totalWeeklyHours * (dataset.divisions.length || 2);
-  }, [dataset]);
+    const totalWeeklyHours = activeDataset.courses.reduce((acc: number, c: { weeklyHours: number }) => acc + c.weeklyHours, 0);
+    return totalWeeklyHours * (activeDataset.divisions.length || 2);
+  }, [activeDataset]);
 
   const divisionNames = useMemo(() => {
-    if (!dataset) return ["5A15-1", "5A15-2"];
-    return dataset.divisions.map((d: { name: string }) => d.name);
-  }, [dataset]);
+    return activeDataset.divisions.map((d: { name: string }) => d.name);
+  }, [activeDataset]);
 
   // Victory celebration when solution is found
   useEffect(() => {
@@ -95,14 +156,23 @@ export const App: React.FC = () => {
   }, [playbackState]);
 
   const handleStartSolve = () => {
-    if (!dataset) return;
+    if (activeDataset.courses.length === 0) {
+      alert("Your Private Workspace currently has 0 courses! Use the '+ COURSE' panel on the right to inject courses before running the solver.");
+      return;
+    }
+
+    const rootName =
+      workspace === "INSTITUTIONAL"
+        ? "XYZ Institute CSP Root (46 Sessions)"
+        : `My Workspace CSP Root (${activeDataset.courses.length} Courses, ${totalVariables} Sessions)`;
+
     const problem: SolverInput = {
-      ...dataset,
+      ...activeDataset,
       constraints: activeConstraints,
     };
     // Use 2,500 backtracks for Naive Chronological mode in browser demo for fast resolution
     const maxBacktracks = heuristicMode === "CHRONOLOGICAL" ? 2500 : 100_000;
-    start(problem, { heuristicMode, maxBacktracks });
+    start(problem, { heuristicMode, maxBacktracks }, rootName);
   };
 
   if (isLoading) {
@@ -195,7 +265,69 @@ export const App: React.FC = () => {
           </div>
         </div>
 
+        {/* Workspace Selector & Status */}
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          {/* Workspace Toggle */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              background: "#080C0A",
+              border: "1px solid #1C2B22",
+              borderRadius: "6px",
+              padding: "2px",
+              gap: "2px",
+            }}
+          >
+            <button
+              onClick={() => setWorkspace("INSTITUTIONAL")}
+              style={{
+                background: workspace === "INSTITUTIONAL" ? "#1A2B20" : "transparent",
+                color: workspace === "INSTITUTIONAL" ? "#39FF88" : "#7A8D80",
+                border: workspace === "INSTITUTIONAL" ? "1px solid #39FF88" : "1px solid transparent",
+                borderRadius: "4px",
+                padding: "4px 10px",
+                fontSize: "10px",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                transition: "all 0.15s ease",
+              }}
+              title="Official protected institutional benchmark (46 sessions)"
+            >
+              <span>🏛️ XYZ INSTITUTE</span>
+              <span style={{ fontSize: "9px", background: "rgba(57, 255, 136, 0.15)", padding: "1px 4px", borderRadius: "3px" }}>
+                BENCHMARK
+              </span>
+            </button>
+
+            <button
+              onClick={() => setWorkspace("CUSTOM")}
+              style={{
+                background: workspace === "CUSTOM" ? "#1A2B20" : "transparent",
+                color: workspace === "CUSTOM" ? "#39FF88" : "#7A8D80",
+                border: workspace === "CUSTOM" ? "1px solid #39FF88" : "1px solid transparent",
+                borderRadius: "4px",
+                padding: "4px 10px",
+                fontSize: "10px",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                transition: "all 0.15s ease",
+              }}
+              title={`Private isolated sandbox (${visitorWsId}) containing your custom injected entities`}
+            >
+              <span>🧪 MY WORKSPACE</span>
+              <span style={{ fontSize: "9px", background: "rgba(57, 255, 136, 0.15)", padding: "1px 4px", borderRadius: "3px" }}>
+                {totalVariables} SESSIONS
+              </span>
+            </button>
+          </div>
+
           <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#7A8D80" }}>
             <span
               style={{
@@ -225,6 +357,59 @@ export const App: React.FC = () => {
           boxSizing: "border-box",
         }}
       >
+        {/* Active Target Banner */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            background: "#0A0E0C",
+            border: "1px solid #1C2B22",
+            padding: "8px 16px",
+            borderRadius: "6px",
+            fontSize: "10px",
+            color: "#7A8D80",
+            flexWrap: "wrap",
+            gap: "8px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ color: "#39FF88", fontWeight: 700 }}>● TARGET WORKSPACE:</span>
+            <span style={{ color: "#EEF8F1", fontWeight: 800, letterSpacing: "0.02em" }}>
+              {workspace === "INSTITUTIONAL" ? "🏛️ XYZ INSTITUTE (PROTECTED BENCHMARK)" : `🧪 MY PRIVATE WORKSPACE (${visitorWsId})`}
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px", fontSize: "10px" }}>
+            <span>COURSES: <strong style={{ color: "#39FF88" }}>{activeDataset.courses.length}</strong></span>
+            <span>SCHEDULABLE SESSIONS: <strong style={{ color: "#39FF88" }}>{totalVariables}</strong></span>
+            <span>FACULTY: <strong style={{ color: "#39FF88" }}>{activeDataset.faculty.length}</strong></span>
+            <span>ROOMS: <strong style={{ color: "#39FF88" }}>{activeDataset.rooms.length}</strong></span>
+          </div>
+        </div>
+
+        {/* Warning if My Workspace is empty */}
+        {workspace === "CUSTOM" && activeDataset.courses.length === 0 && (
+          <div
+            style={{
+              background: "rgba(255, 176, 32, 0.08)",
+              border: "1px dashed #FFB020",
+              borderRadius: "6px",
+              padding: "10px 16px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              color: "#FFB020",
+              fontSize: "10.5px",
+              fontWeight: 600,
+            }}
+          >
+            <AlertTriangle size={16} />
+            <span>
+              MY WORKSPACE HAS 0 COURSES INJECTED (0 SESSIONS). Use the <strong>+ COURSE</strong> panel on the right to inject courses, then click <strong>START CSP SOLVER</strong>.
+            </span>
+          </div>
+        )}
+
         {/* Status Alert Banner */}
         {playbackState === "COMPLETED" && (
           <div
@@ -295,79 +480,100 @@ export const App: React.FC = () => {
           onPause={pause}
           onResume={resume}
           onStep={step}
-          onReset={reset}
+          onReset={() => {
+            const rootName =
+              workspace === "INSTITUTIONAL"
+                ? "XYZ Institute CSP Root (46 Sessions)"
+                : `My Workspace CSP Root (${activeDataset.courses.length} Courses, ${totalVariables} Sessions)`;
+            reset(rootName);
+          }}
           onSpeedChange={setSpeed}
           onHeuristicChange={setHeuristicMode}
         />
 
-        {/* Split Visualizer & Constraint Studio Layout */}
+        {/* Workspace Central Split Layout: Visualizer/Matrix & Studios */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) 390px",
+            gridTemplateColumns: "1fr 420px",
             gap: "14px",
             flex: 1,
-            minHeight: "560px",
+            minHeight: "600px",
           }}
         >
-          {/* Visualizer Area */}
+          {/* Left Column: Tabbed Visualizer & Timetable Matrix */}
           <div
             style={{
+              background: "#0F1612",
+              border: "1px solid #1C2B22",
+              borderRadius: "8px",
               display: "flex",
               flexDirection: "column",
-              gap: "10px",
-              height: "100%",
+              overflow: "hidden",
             }}
           >
-            {/* Tab Selector */}
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                onClick={() => setActiveTab("TREE")}
-                style={{
-                  background: activeTab === "TREE" ? "#15201A" : "transparent",
-                  color: activeTab === "TREE" ? "#39FF88" : "#7A8D80",
-                  border: `1px solid ${activeTab === "TREE" ? "#39FF88" : "transparent"}`,
-                  borderRadius: "6px",
-                  padding: "7px 14px",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  cursor: "pointer",
-                  boxShadow: activeTab === "TREE" ? "0 0 10px rgba(57, 255, 136, 0.2)" : "none",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <GitGraph size={14} />
-                <span>SEARCH TREE EXPLORER (D3)</span>
-              </button>
+            {/* View Tab Selector Bar */}
+            <div
+              style={{
+                borderBottom: "1px solid #1C2B22",
+                padding: "8px 16px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                background: "rgba(10, 14, 12, 0.6)",
+              }}
+            >
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button
+                  onClick={() => setActiveTab("TREE")}
+                  style={{
+                    background: activeTab === "TREE" ? "#1A2B20" : "transparent",
+                    color: activeTab === "TREE" ? "#39FF88" : "#7A8D80",
+                    border: activeTab === "TREE" ? "1px solid #39FF88" : "1px solid transparent",
+                    borderRadius: "4px",
+                    padding: "5px 12px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <GitGraph size={13} />
+                  <span>SEARCH TREE VISUALIZER</span>
+                </button>
 
-              <button
-                onClick={() => setActiveTab("GRID")}
-                style={{
-                  background: activeTab === "GRID" ? "#15201A" : "transparent",
-                  color: activeTab === "GRID" ? "#39FF88" : "#7A8D80",
-                  border: `1px solid ${activeTab === "GRID" ? "#39FF88" : "transparent"}`,
-                  borderRadius: "6px",
-                  padding: "7px 14px",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  cursor: "pointer",
-                  boxShadow: activeTab === "GRID" ? "0 0 10px rgba(57, 255, 136, 0.2)" : "none",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <Calendar size={14} />
-                <span>LIVE MATRIX ({assignments.size}/{totalVariables})</span>
-              </button>
+                <button
+                  onClick={() => setActiveTab("GRID")}
+                  style={{
+                    background: activeTab === "GRID" ? "#1A2B20" : "transparent",
+                    color: activeTab === "GRID" ? "#39FF88" : "#7A8D80",
+                    border: activeTab === "GRID" ? "1px solid #39FF88" : "1px solid transparent",
+                    borderRadius: "4px",
+                    padding: "5px 12px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <Calendar size={13} />
+                  <span>TIMETABLE MATRIX</span>
+                </button>
+              </div>
+
+              <span style={{ fontSize: "10px", color: "#4A5D50" }}>
+                {activeTab === "TREE" ? "D3.JS FORCE HIERARCHY" : "PERIODIC GRID VIEW"}
+              </span>
             </div>
 
-            {/* Tab Content */}
-            <div style={{ flex: 1, minHeight: "500px" }}>
+            {/* Main Visualizer Container */}
+            <div style={{ flex: 1, position: "relative", minHeight: "520px" }}>
               {activeTab === "TREE" ? (
                 <AlgorithmVisualizer
                   treeData={searchTree}
@@ -376,33 +582,33 @@ export const App: React.FC = () => {
                 />
               ) : (
                 <TimetableGrid
-                  assignments={assignments}
                   divisions={divisionNames}
+                  assignments={assignments}
                 />
               )}
             </div>
           </div>
 
-          {/* Right Sidebar: Quick Add & Constraint Studio */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px", height: "100%" }}>
-            <QuickAddPanel
-              facultyList={dataset?.faculty || []}
-              roomList={dataset?.rooms || []}
-              courseList={dataset?.courses || []}
-              onDataRefreshed={fetchData}
+          {/* Right Column: Natural Language Studio & Quick Add Panel */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <ConstraintStudio
+              constraints={activeConstraints}
+              onConstraintsChange={setActiveConstraints}
               disabled={playbackState === "RUNNING"}
             />
-            <div style={{ flex: 1 }}>
-              <ConstraintStudio
-                constraints={activeConstraints}
-                onConstraintsChange={setActiveConstraints}
-                disabled={playbackState === "RUNNING"}
-              />
-            </div>
+
+            <QuickAddPanel
+              facultyList={activeDataset.faculty}
+              roomList={activeDataset.rooms}
+              courseList={activeDataset.courses}
+              onDataRefreshed={() => fetchData(workspace)}
+              disabled={playbackState === "RUNNING"}
+            />
           </div>
         </div>
       </main>
     </div>
   );
 };
+
 export default App;
