@@ -57,7 +57,7 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
   // Running log of custom entities created
   const [customEntities, setCustomEntities] = useState<Array<{ type: string; label: string }>>([]);
 
-  const API_BASE = import.meta.env.VITE_API_URL || "";
+  const API_BASE = import.meta.env.VITE_API_URL || "https://chronos-p8hf.onrender.com";
 
   const handleAddFaculty = async (e: React.FormEvent) => {
     e.preventDefault();

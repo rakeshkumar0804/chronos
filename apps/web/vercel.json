@@ -20,7 +20,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://chronos-api.onrender.com/api/$1"
+      "destination": "https://chronos-p8hf.onrender.com/api/$1"
     },
     {
       "source": "/(.*)",

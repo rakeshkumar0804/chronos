@@ -12,12 +12,14 @@ import confetti from "canvas-confetti";
 
 import { QuickAddPanel } from "./components/QuickAddPanel.js";
 
+import { FALLBACK_DATASET } from "./data/fallbackDataset.js";
+
 export const App: React.FC = () => {
-  const [dataset, setDataset] = useState<Omit<SolverInput, "constraints"> | null>(null);
+  const [dataset, setDataset] = useState<Omit<SolverInput, "constraints">>(FALLBACK_DATASET);
   const [activeConstraints, setActiveConstraints] = useState<Constraint[]>([]);
   const [activeTab, setActiveTab] = useState<"TREE" | "GRID">("TREE");
   const [heuristicMode, setHeuristicMode] = useState<"MRV_LCV" | "CHRONOLOGICAL">("MRV_LCV");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
   const {
@@ -37,7 +39,7 @@ export const App: React.FC = () => {
     reset,
   } = useSolverWorker();
 
-  const API_BASE = import.meta.env.VITE_API_URL || "";
+  const API_BASE = import.meta.env.VITE_API_URL || "https://chronos-p8hf.onrender.com";
 
   const fetchData = () => {
     fetch(`${API_BASE}/api/data`)
@@ -54,11 +56,12 @@ export const App: React.FC = () => {
           divisions: data.divisions,
           timeSlots: data.timeSlots,
         });
+        setApiError(null);
         setIsLoading(false);
       })
       .catch((err) => {
-        console.error("Failed to load institutional dataset:", err);
-        setApiError(err.message || "Failed to connect to backend");
+        console.warn("Backend sync pending (Render cold-start or offline):", err.message);
+        setApiError(err.message || "Connecting to live backend...");
         setIsLoading(false);
       });
   };
