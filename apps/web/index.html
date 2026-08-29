@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CHRONOS // CSP Algorithm Oscilloscope</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bg-void: #0A0E0C;
+        --bg-surface: #0F1612;
+        --bg-elevated: #15201A;
+        --border-subtle: #1C2B22;
+        --border-mid: #2A3F33;
+        --accent-phosphor: #39FF88;
+        --accent-phosphor-dim: #1E6B3E;
+        --accent-red: #FF3B3B;
+        --accent-amber: #FFB020;
+        --text-bright: #EEF8F1;
+        --text-muted: #7A8D80;
+        --text-dim: #4B5A50;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background-color: var(--bg-void);
+        color: var(--text-bright);
+        font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+        overflow-x: hidden;
+        -webkit-font-smoothing: antialiased;
+        letter-spacing: -0.01em;
+      }
+      input, button, select, textarea {
+        font-family: inherit;
+      }
+      /* Oscilloscope Radar Sweep Animation */
+      @keyframes radarSweep {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      @keyframes pulseValue {
+        0% { transform: scale(1); filter: drop-shadow(0 0 2px var(--accent-phosphor)); }
+        50% { transform: scale(1.05); filter: drop-shadow(0 0 10px var(--accent-phosphor)); }
+        100% { transform: scale(1); filter: drop-shadow(0 0 2px var(--accent-phosphor)); }
+      }
+      @keyframes scanline {
+        0% { background-position: 0 0; }
+        100% { background-position: 0 100%; }
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #0A0E0C;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1C2B22;
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #2A3F33;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

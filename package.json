@@ -1,0 +1,32 @@
+{
+  "name": "chronos",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "start": "node apps/api/dist/index.js",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "test:solver": "npm run test:run --workspace=@chronos/solver",
+    "test:csp": "npm run test:csp --workspace=@chronos/solver",
+    "test:stress": "npm run test:stress --workspace=@chronos/solver",
+    "test:stressed": "npm run test:stressed --workspace=@chronos/solver",
+    "test:demo": "npm run test:demo --workspace=@chronos/solver",
+    "test:parser": "npm run test:parser --workspace=@chronos/nl-parser",
+    "test:live": "npm run test:live --workspace=@chronos/nl-parser",
+    "fixtures:generate": "npm run fixtures:generate --workspace=@chronos/solver",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

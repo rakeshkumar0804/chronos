@@ -1,0 +1,172 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CourseType {
+  LECTURE
+  LAB
+}
+
+enum RoomType {
+  LECTURE_ROOM
+  LAB
+}
+
+enum DayOfWeek {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+}
+
+enum ConstraintType {
+  HARD
+  SOFT
+}
+
+model Institute {
+  id        String     @id @default(uuid())
+  name      String
+  courses   Course[]
+  faculties Faculty[]
+  rooms     Room[]
+  divisions Division[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("institutes")
+}
+
+model Course {
+  id           String                    @id @default(uuid())
+  code         String                    @unique
+  name         String
+  shortCode    String
+  type         CourseType
+  weeklyHours  Int
+  instituteId  String?
+  institute    Institute?                @relation(fields: [instituteId], references: [id], onDelete: SetNull)
+  assignments  FacultyCourseAssignment[]
+  schedules    ScheduleEntry[]
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  @@map("courses")
+}
+
+model Faculty {
+  id           String                    @id @default(uuid())
+  shortCode    String                    @unique
+  fullName     String
+  email        String                    @unique
+  instituteId  String?
+  institute    Institute?                @relation(fields: [instituteId], references: [id], onDelete: SetNull)
+  assignments  FacultyCourseAssignment[]
+  schedules    ScheduleEntry[]
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  @@map("faculties")
+}
+
+model FacultyCourseAssignment {
+  facultyId   String
+  courseId    String
+  assignedAt  DateTime @default(now())
+
+  faculty     Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([facultyId, courseId])
+  @@map("faculty_course_assignments")
+}
+
+model Room {
+  id          String          @id @default(uuid())
+  roomNo      String          @unique
+  type        RoomType
+  capacity    Int?
+  instituteId String?
+  institute   Institute?      @relation(fields: [instituteId], references: [id], onDelete: SetNull)
+  schedules   ScheduleEntry[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("rooms")
+}
+
+model Division {
+  id          String          @id @default(uuid())
+  name        String          @unique // e.g. "5A15-1"
+  semester    Int
+  program     String
+  instituteId String?
+  institute   Institute?      @relation(fields: [instituteId], references: [id], onDelete: SetNull)
+  schedules   ScheduleEntry[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("divisions")
+}
+
+model TimeSlot {
+  id         String          @id @default(uuid())
+  day        DayOfWeek
+  startTime  String          // e.g. "09:00"
+  endTime    String          // e.g. "10:00"
+  isBreak    Boolean         @default(false)
+  breakLabel String?         // e.g. "RECESS", "LUNCH"
+  schedules  ScheduleEntry[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([day, startTime, endTime])
+  @@map("time_slots")
+}
+
+model ScheduleEntry {
+  id         String    @id @default(uuid())
+  courseId   String
+  facultyId  String
+  roomId     String
+  divisionId String
+  timeSlotId String
+
+  course     Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  faculty    Faculty   @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  room       Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  division   Division  @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  timeSlot   TimeSlot  @relation(fields: [timeSlotId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([courseId])
+  @@index([facultyId])
+  @@index([roomId])
+  @@index([divisionId])
+  @@index([timeSlotId])
+  @@map("schedule_entries")
+}
+
+model Constraint {
+  id             String         @id @default(uuid())
+  type           ConstraintType
+  category       String
+  description    String
+  structuredRule Json
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@map("constraints")
+}
