@@ -105,7 +105,13 @@ const days: DayOfWeek[] = [
 ];
 
 async function main(): Promise<void> {
-  console.log("Seeding CHRONOS database with real timetable dataset...");
+  const existingCourses = await prisma.course.count();
+  if (existingCourses > 0) {
+    console.log(`CHRONOS database already initialized with ${existingCourses} courses. Preserving all existing records and custom entities.`);
+    return;
+  }
+
+  console.log("Seeding CHRONOS database with real timetable dataset for the first time...");
 
   // 1. Clean existing records in reverse order of foreign key dependencies
   await prisma.scheduleEntry.deleteMany();

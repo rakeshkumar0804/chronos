@@ -6,12 +6,14 @@ interface FacultyItem {
   shortCode: string;
   fullName: string;
   email: string;
+  isCustom?: boolean;
 }
 
 interface RoomItem {
   id: string;
   roomNo: string;
   type: string;
+  isCustom?: boolean;
 }
 
 interface CourseItem {
@@ -21,6 +23,7 @@ interface CourseItem {
   shortCode: string;
   type: string;
   weeklyHours: number;
+  isCustom?: boolean;
 }
 
 interface QuickAddPanelProps {
@@ -33,6 +36,8 @@ interface QuickAddPanelProps {
 
 export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
   facultyList,
+  roomList = [],
+  courseList = [],
   onDataRefreshed,
   disabled = false,
 }) => {
@@ -54,8 +59,20 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "SUCCESS" | "ERROR"; text: string } | null>(null);
 
-  // Running log of custom entities created
-  const [customEntities, setCustomEntities] = useState<Array<{ type: string; label: string }>>([]);
+  // Derived list of persistent custom entities from database state
+  const customEntities = React.useMemo(() => {
+    const list: Array<{ type: string; label: string }> = [];
+    (courseList || []).filter((c) => c.isCustom).forEach((c) => {
+      list.push({ type: "COURSE", label: `${c.shortCode} (${c.name}, ${c.weeklyHours}h)` });
+    });
+    (facultyList || []).filter((f) => f.isCustom).forEach((f) => {
+      list.push({ type: "FACULTY", label: `${f.fullName} (${f.shortCode})` });
+    });
+    (roomList || []).filter((r) => r.isCustom).forEach((r) => {
+      list.push({ type: "ROOM", label: `Room ${r.roomNo} (${r.type})` });
+    });
+    return list;
+  }, [courseList, facultyList, roomList]);
 
   const API_BASE = import.meta.env.VITE_API_URL || "https://chronos-p8hf.onrender.com";
 
@@ -74,7 +91,6 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to add faculty");
 
-      setCustomEntities((prev) => [...prev, { type: "FACULTY", label: `${data.faculty.fullName} (${data.faculty.shortCode})` }]);
       setStatusMessage({ type: "SUCCESS", text: `Faculty "${data.faculty.fullName}" created.` });
       setFacultyForm({ shortCode: "", fullName: "", email: "" });
       onDataRefreshed();
@@ -100,7 +116,6 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to add room");
 
-      setCustomEntities((prev) => [...prev, { type: "ROOM", label: `Room ${data.room.roomNo} (${data.room.type})` }]);
       setStatusMessage({ type: "SUCCESS", text: `Room "${data.room.roomNo}" created.` });
       setRoomForm({ roomNo: "", type: "LECTURE_ROOM", capacity: 60 });
       onDataRefreshed();
@@ -130,13 +145,6 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to add course");
 
-      setCustomEntities((prev) => [
-        ...prev,
-        {
-          type: "COURSE",
-          label: `${data.course.shortCode} (${data.course.weeklyHours}h, ${courseForm.facultyShortCodes.join("/")})`,
-        },
-      ]);
       setStatusMessage({ type: "SUCCESS", text: `Course "${data.course.name} (${data.course.shortCode})" created.` });
       setCourseForm({
         code: "",
@@ -166,7 +174,6 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to reset custom data");
 
-      setCustomEntities([]);
       setStatusMessage({
         type: "SUCCESS",
         text: `Reset complete. Deleted ${data.deleted.courses} courses, ${data.deleted.faculty} faculty, ${data.deleted.rooms} rooms. Verified benchmark intact.`,
