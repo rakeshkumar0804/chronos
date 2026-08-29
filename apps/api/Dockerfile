@@ -2,7 +2,6 @@
 FROM node:20-alpine
 
 WORKDIR /app
-ENV NODE_ENV=production
 ENV PORT=4000
 
 # Install OpenSSL and compat libraries for Prisma on Alpine Linux
@@ -15,8 +14,8 @@ COPY prisma ./prisma/
 COPY packages ./packages/
 COPY apps/api ./apps/api/
 
-# Install dependencies and build monorepo packages
-RUN npm ci
+# Install all dependencies including build tools
+RUN npm ci --include=dev
 RUN npx prisma generate
 RUN npm run build --workspace=@chronos/shared
 RUN npm run build --workspace=@chronos/solver

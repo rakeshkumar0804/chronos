@@ -98,8 +98,8 @@ app.post("/api/solve", async (req: Request, res: Response) => {
 });
 
 if (process.env.NODE_ENV !== "test") {
-  app.listen(port, () => {
-    console.log(`[CHRONOS API] Server running on http://localhost:${port}`);
+  app.listen(Number(port), "0.0.0.0", () => {
+    console.log(`[CHRONOS API] Server running on http://0.0.0.0:${port}`);
   });
 }
 
