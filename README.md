@@ -1,7 +1,7 @@
 # CHRONOS
 ### Constraint-Based Timetable Scheduling Engine with Live Algorithm Visualization
 
-`stack` **React · Express · PostgreSQL · Gemini** &nbsp;|&nbsp; `typecheck` **0 errors / 5 workspaces** &nbsp;|&nbsp; `nl-parser tests` **7/7 passing**
+![stack](https://img.shields.io/badge/stack-React_%7C_Express_%7C_PostgreSQL_%7C_Gemini-blue) ![typecheck](https://img.shields.io/badge/typecheck-0_errors_%2F_5_workspaces-brightgreen) ![nl--parser tests](https://img.shields.io/badge/nl--parser_tests-7%2F7_passing-brightgreen)
 
 CHRONOS is a hand-written Constraint Satisfaction Problem (CSP) solver that generates conflict-free academic timetables — and lets you *watch it think*. It exposes the internal search process (backtracking, pruning, conflict resolution) as a live, animated search tree, and includes a natural-language interface for adding real-world scheduling constraints.
 
