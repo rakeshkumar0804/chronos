@@ -384,9 +384,31 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
               </div>
 
               {/* Faculty Selector Multi-select Chips */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <span style={{ fontSize: "9px", color: "#7A8D80", fontWeight: 600 }}>ASSIGN QUALIFIED FACULTY (CLICK TO SELECT):</span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", maxHeight: "70px", overflowY: "auto", padding: "2px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "9px", color: courseForm.facultyShortCodes.length > 0 ? "#39FF88" : "#7A8D80", fontWeight: 700 }}>
+                    ASSIGN QUALIFIED FACULTY ({courseForm.facultyShortCodes.length} SELECTED • MULTI-SELECT):
+                  </span>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <button
+                      type="button"
+                      onClick={() => setCourseForm({ ...courseForm, facultyShortCodes: facultyList.map((f) => f.shortCode) })}
+                      style={{ background: "none", border: "none", color: "#39FF88", fontSize: "9px", cursor: "pointer", padding: 0 }}
+                    >
+                      ALL
+                    </button>
+                    <span style={{ color: "#1C2B22", fontSize: "9px" }}>|</span>
+                    <button
+                      type="button"
+                      onClick={() => setCourseForm({ ...courseForm, facultyShortCodes: [] })}
+                      style={{ background: "none", border: "none", color: "#7A8D80", fontSize: "9px", cursor: "pointer", padding: 0 }}
+                    >
+                      CLEAR
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", maxHeight: "85px", overflowY: "auto", padding: "2px" }}>
                   {facultyList.map((f) => {
                     const isSelected = courseForm.facultyShortCodes.includes(f.shortCode);
                     return (
@@ -395,21 +417,34 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
                         key={f.id}
                         onClick={() => toggleFacultySelection(f.shortCode)}
                         style={{
-                          background: isSelected ? "rgba(57, 255, 136, 0.15)" : "#0A0E0C",
-                          color: isSelected ? "#39FF88" : "#7A8D80",
+                          background: isSelected ? "#39FF88" : "#0A0E0C",
+                          color: isSelected ? "#0A0E0C" : "#7A8D80",
                           border: `1px solid ${isSelected ? "#39FF88" : "#1C2B22"}`,
-                          borderRadius: "3px",
-                          padding: "2px 6px",
-                          fontSize: "9px",
-                          fontWeight: isSelected ? 700 : 400,
+                          borderRadius: "4px",
+                          padding: "3px 7px",
+                          fontSize: "10px",
+                          fontWeight: isSelected ? 800 : 500,
                           cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          boxShadow: isSelected ? "0 0 8px rgba(57, 255, 136, 0.3)" : "none",
+                          transition: "all 0.1s ease",
                         }}
+                        title={`${f.fullName} (${f.shortCode})`}
                       >
-                        {f.shortCode} {isSelected && "✓"}
+                        <span>{isSelected ? "☑" : "☐"}</span>
+                        <span>{f.shortCode}</span>
                       </button>
                     );
                   })}
                 </div>
+
+                {courseForm.facultyShortCodes.length > 0 && (
+                  <span style={{ fontSize: "9px", color: "#A3B0A0", lineHeight: "1.3" }}>
+                    Co-teaching: {courseForm.facultyShortCodes.join(", ")}
+                  </span>
+                )}
               </div>
 
               <button type="submit" disabled={isSubmitting || disabled} style={submitButtonStyle}>
