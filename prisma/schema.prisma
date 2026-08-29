@@ -55,6 +55,7 @@ model Course {
   shortCode    String
   type         CourseType
   weeklyHours  Int
+  isCustom     Boolean                   @default(false)
   instituteId  String?
   institute    Institute?                @relation(fields: [instituteId], references: [id], onDelete: SetNull)
   assignments  FacultyCourseAssignment[]
@@ -70,6 +71,7 @@ model Faculty {
   shortCode    String                    @unique
   fullName     String
   email        String                    @unique
+  isCustom     Boolean                   @default(false)
   instituteId  String?
   institute    Institute?                @relation(fields: [instituteId], references: [id], onDelete: SetNull)
   assignments  FacultyCourseAssignment[]
@@ -83,6 +85,7 @@ model Faculty {
 model FacultyCourseAssignment {
   facultyId   String
   courseId    String
+  isCustom    Boolean  @default(false)
   assignedAt  DateTime @default(now())
 
   faculty     Faculty  @relation(fields: [facultyId], references: [id], onDelete: Cascade)
@@ -97,6 +100,7 @@ model Room {
   roomNo      String          @unique
   type        RoomType
   capacity    Int?
+  isCustom    Boolean         @default(false)
   instituteId String?
   institute   Institute?      @relation(fields: [instituteId], references: [id], onDelete: SetNull)
   schedules   ScheduleEntry[]

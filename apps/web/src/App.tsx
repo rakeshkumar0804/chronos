@@ -10,6 +10,8 @@ import { ConstraintStudio } from "./components/ConstraintStudio.js";
 import { CheckCircle, XCircle, GitGraph, Calendar, Activity } from "lucide-react";
 import confetti from "canvas-confetti";
 
+import { QuickAddPanel } from "./components/QuickAddPanel.js";
+
 export const App: React.FC = () => {
   const [dataset, setDataset] = useState<Omit<SolverInput, "constraints"> | null>(null);
   const [activeConstraints, setActiveConstraints] = useState<Constraint[]>([]);
@@ -37,8 +39,7 @@ export const App: React.FC = () => {
 
   const API_BASE = import.meta.env.VITE_API_URL || "";
 
-  // Load institutional dataset from PostgreSQL backend
-  useEffect(() => {
+  const fetchData = () => {
     fetch(`${API_BASE}/api/data`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
@@ -60,6 +61,11 @@ export const App: React.FC = () => {
         setApiError(err.message || "Failed to connect to backend");
         setIsLoading(false);
       });
+  };
+
+  // Load institutional dataset from PostgreSQL backend
+  useEffect(() => {
+    fetchData();
   }, []);
 
   const totalVariables = useMemo(() => {
@@ -374,13 +380,22 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          {/* Right Sidebar: Constraint Studio */}
-          <div style={{ height: "100%" }}>
-            <ConstraintStudio
-              constraints={activeConstraints}
-              onConstraintsChange={setActiveConstraints}
+          {/* Right Sidebar: Quick Add & Constraint Studio */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px", height: "100%" }}>
+            <QuickAddPanel
+              facultyList={dataset?.faculty || []}
+              roomList={dataset?.rooms || []}
+              courseList={dataset?.courses || []}
+              onDataRefreshed={fetchData}
               disabled={playbackState === "RUNNING"}
             />
+            <div style={{ flex: 1 }}>
+              <ConstraintStudio
+                constraints={activeConstraints}
+                onConstraintsChange={setActiveConstraints}
+                disabled={playbackState === "RUNNING"}
+              />
+            </div>
           </div>
         </div>
       </main>
