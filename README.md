@@ -9,6 +9,20 @@ Built on a real dataset: the actual 5th-semester CSE timetable structure of a Co
 
 ---
 
+## 🔴 Live Demo
+
+**[chronos-web-kappa.vercel.app](https://chronos-web-kappa.vercel.app)**
+
+Try it yourself — no setup required:
+1. Click **"Naive vs Smart Bottleneck Demo"** to load the benchmark scenario
+2. Run it in **Chronological (Naive)** mode — watch it hit a bounded search limit after thousands of failed backtracks
+3. Switch to **MRV + LCV (Smart)** and re-run — watch it solve the identical problem in 46 steps with zero mistakes
+4. Try typing a constraint in plain English in the **NL Constraint Injector** panel (e.g. *"Room 132 is closed on Friday morning for maintenance"*) and watch it get parsed and validated live
+
+*(First backend request may take a few seconds to respond — it's hosted on a free-tier server that sleeps after inactivity.)*
+
+---
+
 ## Why This Exists
 
 Most "AI scheduling" demos are a thin prompt wrapped around an LLM that hallucinates a plausible-looking timetable. CHRONOS does the opposite: **the actual constraint solving is a deterministic, hand-written algorithm with zero external dependencies.** The LLM (Google Gemini) is used for exactly one thing — translating a sentence like *"Prof. Rathi is on leave Monday and Tuesday"* into a structured, database-validated constraint. It never touches the scheduling logic itself.
