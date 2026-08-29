@@ -35,9 +35,11 @@ export const App: React.FC = () => {
     reset,
   } = useSolverWorker();
 
+  const API_BASE = import.meta.env.VITE_API_URL || "";
+
   // Load institutional dataset from PostgreSQL backend
   useEffect(() => {
-    fetch("/api/data")
+    fetch(`${API_BASE}/api/data`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         return res.json();

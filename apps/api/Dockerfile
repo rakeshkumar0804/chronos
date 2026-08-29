@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Copy root manifest and workspace configurations
 COPY package*.json ./
-COPY tsconfig.json ./
+COPY tsconfig.base.json ./
 COPY prisma ./prisma/
 COPY packages ./packages/
 COPY apps/api ./apps/api/
@@ -35,5 +35,5 @@ COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
 
 EXPOSE 4000
 
-# Run migrations and start production server
-CMD ["sh", "-c", "npx prisma migrate deploy && node apps/api/dist/index.js"]
+# Push schema, seed dataset if empty, and start API server
+CMD ["sh", "-c", "npx prisma db push && npx tsx prisma/seed.ts && node apps/api/dist/index.js"]
