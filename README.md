@@ -37,7 +37,7 @@ A fair question: ChatGPT, Claude, or Gemini can already produce a timetable if y
 
 **Because an LLM can't guarantee correctness — it can only guarantee plausibility.** Ask an LLM to schedule 46 sessions across 12 faculty, 4 rooms, and 6 days, and it will produce something that *looks* like a valid timetable. It has no mechanism to formally verify that no faculty member is double-booked, no room is double-booked, and every hard constraint holds simultaneously across all 46 assignments — it's pattern-matching against what a timetable typically looks like, not proving correctness. At this project's scale, verifying that by hand is tedious. At real-institution scale (hundreds of courses), it's practically impossible to eyeball, and an LLM's context window and consistency degrade well before then.
 
-This project's own benchmark data makes the point concretely: an **unguided search** (the "Chronological / Naive" mode — evaluate options in whatever order they come, no lookahead) is a reasonable proxy for how an LLM would approach the same problem — no systematic strategy for which choice to make first, no formal backtracking guarantee. On this dataset, that approach hits a bounded search limit after **2,328 failed attempts and still doesn't find a solution.** The MRV+LCV-guided solver finds a fully valid one in **46 steps, zero mistakes.**
+This project's own benchmark data makes the point concretely: an **unguided search** (the "Chronological / Naive" mode — evaluate options in whatever order they come, no lookahead) is a reasonable proxy for how an LLM would approach the same problem — no systematic strategy for which choice to make first, no formal backtracking guarantee. On this dataset, that approach hits a bounded search limit after **2,998 failed attempts and still doesn't find a solution.** The MRV+LCV-guided solver finds a fully valid one in **46 steps, zero mistakes.**
 
 A CSP solver is deterministic: if a solution exists, it is guaranteed to find one (given enough search budget), and if none exists, it can say so with confidence — not "here's my best guess." An LLM offers neither guarantee. That's the actual case for writing this instead of prompting a chatbot.
 
@@ -51,8 +51,8 @@ The most direct way to see what CHRONOS actually does is to load the **"Naive vs
 
 | Mode | Result | Nodes Explored | Backtracks | Time |
 |---|---|---|---|---|
-| **Chronological (naive ordering)** | Bounded search limit reached — no solution found | 2,328 | 2,328 | ~1.2s (browser) |
-| **MRV + LCV (smart heuristics)** | Solved — 0 constraint violations | 46 | 0 | ~45ms |
+| **Chronological (naive ordering)** | Bounded search limit reached (1,000-backtrack budget) — no solution found | 2,998 | 2,998 | ~1.2s (browser) |
+| **MRV + LCV (smart heuristics)** | Solved — 0 constraint violations | 46 | 0 | ~35ms |
 
 Same problem. Same 46 required sessions. Same hard constraints (two faculty on partial leave, a blocked time slot, a daily course-repeat limit). The only difference is *which variable the solver picks next* when it has a choice.
 
@@ -145,11 +145,23 @@ Before this constraint is accepted, it's validated against the real database —
 
 ---
 
+## Quick Add: Feeding It Different Data
+
+The solver isn't hardcoded to this one dataset — it reads whatever Courses, Faculty, and Rooms exist in the database and solves for that. A **Quick Add** panel lets new entities be added directly from the UI:
+
+- Add a single Faculty, Room, or Course (with multi-select for co-teaching — several courses in the seeded dataset, like the lab sections, are already taught by two instructors, so this had to be supported from the start)
+- **Bulk Import** accepts multiple entities pasted at once in a simple line-based format, so a larger set of new data doesn't mean filling out a form one entry at a time
+- A **Reset to Benchmark Data** action clears anything added this way, restoring the original 46-session dataset
+
+This means the demo isn't limited to the one seeded timetable — new courses, faculty, or rooms typed in live get picked up by the same solver, same heuristics, no code changes required.
+
+---
+
 ## Tech Stack
 
-- **Frontend:** React 18, TypeScript (strict), Vite, D3.js (search tree), GSAP (animation pacing)
-- **Backend:** Node.js, Express, TypeScript (strict)
-- **Database:** PostgreSQL, Prisma ORM
+- **Frontend:** React 18, TypeScript (strict), Vite, D3.js (search tree), GSAP (animation pacing) — deployed on Vercel
+- **Backend:** Node.js, Express, TypeScript (strict) — deployed on Render
+- **Database:** PostgreSQL, Prisma ORM — hosted on Neon (serverless Postgres)
 - **AI:** Google Gemini (structured output / JSON schema mode) — used exclusively for natural language constraint parsing, never for scheduling logic
 - **Solver:** hand-written TypeScript, zero external CSP/optimization libraries
 
@@ -173,9 +185,9 @@ npm run dev
 
 ## What's Not in Scope (Yet)
 
-- Soft-constraint optimization (preferences are parsed and stored but not yet weighted into the objective function)
-- Multi-institution / multi-semester scheduling
-- A second search strategy beyond backtracking (e.g., simulated annealing) for very large instances
+- Soft-constraint optimization (preferences are parsed and stored but not yet weighted into the objective function — the solver currently optimizes for feasibility, not for things like spreading sessions evenly across the week)
+- Per-visitor isolated workspaces (a fully separate scheduling instance per user, so a visitor's Quick Add data never mixes with the demo dataset) — attempted, but data-isolation bugs surfaced faster than they could be reliably fixed, so this was rolled back in favor of protecting the verified core solver and benchmark data. The solver's data layer is already workspace-agnostic by design, so this is a scoped addition for later, not an architectural rewrite.
+- A second search strategy beyond backtracking (e.g., simulated annealing) for much larger instances
 
 ---
 
