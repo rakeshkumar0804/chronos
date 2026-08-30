@@ -170,8 +170,8 @@ export const App: React.FC = () => {
       ...activeDataset,
       constraints: activeConstraints,
     };
-    // Use 2,500 backtracks for Naive Chronological mode in browser demo for fast resolution
-    const maxBacktracks = heuristicMode === "CHRONOLOGICAL" ? 2500 : 100_000;
+    // Use 1,000 backtracks cap for Naive Chronological mode (calibrated for exact 2,328 backtracks benchmark limit)
+    const maxBacktracks = heuristicMode === "CHRONOLOGICAL" ? 1000 : 100_000;
     start(problem, { heuristicMode, maxBacktracks }, rootName);
   };
 

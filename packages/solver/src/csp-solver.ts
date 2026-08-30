@@ -52,17 +52,17 @@ export function* solveCSP(
   };
 
   const NAIVE_CHRONOLOGICAL_ORDER: Record<string, number> = {
-    AF: 1,
-    PCE: 2,
-    "DADV-L": 3,
-    DADV: 4,
-    "EP-L": 5,
-    EP: 6,
-    TOC: 7,
+    "AF": 1,
+    "PCE": 2,
+    "DADV": 3,
+    "EP": 4,
+    "DADV-L": 5,
+    "EP-L": 6,
+    "DAA-L": 7,
     "SE-L": 8,
-    SE: 9,
-    "DAA-L": 10,
-    DAA: 11,
+    "TOC": 9,
+    "DAA": 10,
+    "SE": 11,
   };
 
   const ROOM_ORDER: Record<string, number> = {
@@ -342,88 +342,73 @@ export function* solveCSP(
     const pruned: PrunedEntry[] = [];
     const unassigned = variables.filter((v) => !assigned.has(v.id));
 
-    // Daily limit check
-    const specificKey = `${assignedVar.divisionName}_${assignedVar.courseShortCode}`;
-    const wildcardKey = `*_${assignedVar.courseShortCode}`;
-    const globalKey = "*_*";
-    const limit =
-      maxSessionsPerDay.get(specificKey) ??
-      maxSessionsPerDay.get(wildcardKey) ??
-      maxSessionsPerDay.get(globalKey) ??
-      Infinity;
-
-    if (limit !== Infinity) {
-      let countToday = 0;
-      for (const v of variables) {
-        if (v.divisionName === assignedVar.divisionName && v.courseShortCode === assignedVar.courseShortCode) {
-          const aVal = assigned.get(v.id);
-          if (aVal && aVal.timeSlotDay === assignedVal.timeSlotDay) {
-            countToday++;
-          }
-        }
-      }
-
-      if (countToday >= limit) {
-        for (const unassignedVar of unassigned) {
-          if (unassignedVar.divisionName === assignedVar.divisionName && unassignedVar.courseShortCode === assignedVar.courseShortCode) {
-            const dom = currentDomains.get(unassignedVar.id) || [];
-            const remaining: DomainAssignmentValue[] = [];
-            for (const cand of dom) {
-              if (cand.timeSlotDay === assignedVal.timeSlotDay) {
-                pruned.push({
-                  variableId: unassignedVar.id,
-                  prunedValue: cand,
-                  reason: `Max daily sessions limit (${limit}) reached on ${assignedVal.timeSlotDay}`,
-                });
-              } else {
-                remaining.push(cand);
-              }
-            }
-            currentDomains.set(unassignedVar.id, remaining);
-            if (remaining.length === 0) {
-              return {
-                success: false,
-                pruned,
-                conflictReason: `Daily session limit exceeded on ${assignedVal.timeSlotDay}`,
-                conflictWith: unassignedVar.id,
-              };
-            }
-          }
-        }
-      }
-    }
-
-    // Direct resource collision pruning
     for (const unassignedVar of unassigned) {
-      const dom = currentDomains.get(unassignedVar.id) || [];
+      const dom = currentDomains.get(unassignedVar.id);
+      if (!dom) continue;
+
       const remaining: DomainAssignmentValue[] = [];
 
       for (const candidate of dom) {
-        let isPruned = false;
-        let pruneReason = "";
-
+        // Direct resource collision
         if (candidate.timeSlotId === assignedVal.timeSlotId) {
-          if (candidate.facultyId === assignedVal.facultyId) {
-            isPruned = true;
-            pruneReason = `Faculty collision: ${assignedVal.facultyShortCode} assigned to ${assignedVar.id}`;
-          } else if (candidate.roomId === assignedVal.roomId) {
-            isPruned = true;
-            pruneReason = `Room collision: Room ${assignedVal.roomNo} assigned to ${assignedVar.id}`;
-          } else if (unassignedVar.divisionId === assignedVar.divisionId) {
-            isPruned = true;
-            pruneReason = `Division overlap: ${assignedVar.divisionName} busy with ${assignedVar.courseShortCode}`;
+          const isDivisionConflict = unassignedVar.divisionId === assignedVar.divisionId;
+          const isRoomConflict = candidate.roomId === assignedVal.roomId;
+          const isFacultyConflict = candidate.facultyId === assignedVal.facultyId;
+
+          if (isDivisionConflict || isRoomConflict || isFacultyConflict) {
+            pruned.push({
+              variableId: unassignedVar.id,
+              prunedValue: candidate,
+              reason: isFacultyConflict
+                ? `Faculty collision: ${assignedVal.facultyShortCode} assigned to ${assignedVar.id}`
+                : isRoomConflict
+                ? `Room collision: Room ${assignedVal.roomNo} assigned to ${assignedVar.id}`
+                : `Division overlap: ${assignedVar.divisionName} busy with ${assignedVar.courseShortCode}`,
+            });
+            continue;
           }
         }
 
-        if (isPruned) {
-          pruned.push({
-            variableId: unassignedVar.id,
-            prunedValue: candidate,
-            reason: pruneReason,
-          });
-        } else {
-          remaining.push(candidate);
+        // Daily limit check
+        if (
+          candidate.timeSlotDay === assignedVal.timeSlotDay &&
+          unassignedVar.divisionId === assignedVar.divisionId &&
+          unassignedVar.courseId === assignedVar.courseId &&
+          problem.constraints
+        ) {
+          let shouldPruneDaily = false;
+          for (const c of problem.constraints) {
+            if (c.type === "HARD" && c.category === "DAILY_COURSE_LIMIT") {
+              const rule = c.structuredRule as { maxDailySessions?: number; courseShortCodes?: string[] };
+              const maxSessions = rule.maxDailySessions ?? 1;
+              if (!rule.courseShortCodes || rule.courseShortCodes.includes(assignedVar.courseShortCode)) {
+                let assignedOnDay = 1;
+                for (const [varId, val] of assigned.entries()) {
+                  if (varId !== assignedVar.id && val.timeSlotDay === assignedVal.timeSlotDay) {
+                    const otherVar = variables.find((v) => v.id === varId);
+                    if (otherVar && otherVar.divisionId === assignedVar.divisionId && otherVar.courseId === assignedVar.courseId) {
+                      assignedOnDay++;
+                    }
+                  }
+                }
+                if (assignedOnDay >= maxSessions) {
+                  shouldPruneDaily = true;
+                  break;
+                }
+              }
+            }
+          }
+          if (shouldPruneDaily) {
+            pruned.push({
+              variableId: unassignedVar.id,
+              prunedValue: candidate,
+              reason: `Max daily sessions limit reached on ${assignedVal.timeSlotDay}`,
+            });
+            continue;
+          }
         }
+
+        remaining.push(candidate);
       }
 
       if (remaining.length < dom.length) {

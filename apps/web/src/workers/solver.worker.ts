@@ -143,13 +143,14 @@ function runLoop() {
 
     timerHandle = setTimeout(runLoop, 0);
   } else {
-    // Paced playback: batch size proportional to speed
-    // speed 0.25 -> 1 event / 200ms
-    // speed 1 -> 1 event / 40ms
-    // speed 5 -> 5 events / 25ms
-    // speed 20 -> 25 events / 16ms (60 FPS)
-    const batchSize = playbackSpeed >= 20 ? 30 : playbackSpeed >= 5 ? 5 : 1;
-    const delay = playbackSpeed >= 20 ? 16 : Math.max(1, Math.round(40 / playbackSpeed));
+    // 60 FPS Paced playback: batch size calibrated for smooth real-time animation
+    // speed 0.25 -> 5 events / 40ms (slow-motion examination)
+    // speed 1 -> 25 events / 16ms (smooth 60 FPS live oscilloscope trace: ~1.2s total)
+    // speed 5 -> 120 events / 16ms (~250ms total)
+    // speed 20 -> 500 events / 16ms (~60ms total)
+    const batchSize =
+      playbackSpeed >= 20 ? 500 : playbackSpeed >= 5 ? 120 : playbackSpeed === 1 ? 25 : 5;
+    const delay = playbackSpeed >= 20 ? 16 : playbackSpeed >= 5 ? 16 : playbackSpeed === 1 ? 16 : 40;
 
     const batch: SolverStepEvent[] = [];
     let hasMore = true;
