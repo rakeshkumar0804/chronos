@@ -572,6 +572,16 @@ export function solve(input: SolverInput, options: SolverOptions = {}): SolverRe
   const success = backtrack();
   const elapsed = performance.now() - startTime;
 
+  const terminationStatus = success
+    ? "NATURALLY_CONVERGED_SOLVED"
+    : backtrackCount > maxBacktracks
+    ? `HIT_CAP (${maxBacktracks} max backtracks exceeded)`
+    : elapsed > timeoutMs
+    ? `HIT_TIMEOUT (${timeoutMs}ms elapsed)`
+    : "SEARCH_SPACE_EXHAUSTED";
+
+  console.log(`[SOLVER INSTRUMENTATION] Mode: ${heuristicMode} | Result: ${success ? "SUCCESS" : "FAILURE"} | Nodes: ${nodesExplored} | Backtracks: ${backtrackCount} | Time: ${elapsed.toFixed(2)}ms | Termination: ${terminationStatus}`);
+
   if (!success) {
     return {
       success: false,
