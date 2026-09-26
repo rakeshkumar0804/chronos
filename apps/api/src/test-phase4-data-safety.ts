@@ -1,7 +1,7 @@
 import { PrismaClient, CourseType, RoomType, DayOfWeek, ConstraintType } from "@prisma/client";
 import fs from "fs";
 import path from "path";
-import { execSync, spawn } from "child_process";
+import { execSync, spawn, ChildProcess } from "child_process";
 import { solve } from "@chronos/solver";
 import { XYZ_INSTITUTE_WORKSPACE } from "./db.js";
 
@@ -31,6 +31,47 @@ async function getDbRowCounts(): Promise<DbCounts> {
     prisma.division.count(),
   ]);
   return { courses, faculty, rooms, assignments, schedules, constraints, timeSlots, divisions };
+}
+
+async function stopChildProcess(child: ChildProcess, timeoutMs = 2000): Promise<void> {
+  if (child.exitCode !== null || child.killed) {
+    try {
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+    } catch {}
+    return;
+  }
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      try {
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        child.kill("SIGKILL");
+      } catch {}
+      resolve();
+    }, timeoutMs);
+
+    const onExitOrClose = () => {
+      clearTimeout(timer);
+      try {
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+      } catch {}
+      resolve();
+    };
+
+    child.once("close", onExitOrClose);
+    child.once("exit", onExitOrClose);
+
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      try { child.kill("SIGKILL"); } catch {}
+      clearTimeout(timer);
+      resolve();
+    }
+  });
 }
 
 async function runPhase4DataSafetyTest(): Promise<void> {
@@ -282,13 +323,12 @@ async function runPhase4DataSafetyTest(): Promise<void> {
       }
 
       if (!started) {
-        try { child.kill("SIGKILL"); } catch {}
+        await stopChildProcess(child);
         throw new Error(`FAIL: Production API process failed to respond on port ${testPort} within 15s (exitCode=${exitCode}, exitSignal=${exitSignal}).\nProcess Logs:\n${childLogs}`);
       }
 
       console.log(`  ✓ API Process cycle #${restartCycle} responded on http://localhost:${testPort}/api/health`);
-      try { child.kill("SIGKILL"); } catch {}
-      await new Promise((r) => setTimeout(r, 500));
+      await stopChildProcess(child);
       console.log(`  ✓ Stopped API Process cycle #${restartCycle}`);
 
       await assertSentinelIntegrity(`API Process Restart #${restartCycle}`);
@@ -385,7 +425,12 @@ async function runPhase4DataSafetyTest(): Promise<void> {
   }
 }
 
-runPhase4DataSafetyTest().catch((err) => {
-  console.error("\n[TEST ERROR]", err);
-  process.exit(1);
-});
+runPhase4DataSafetyTest()
+  .then(() => {
+    console.log("\n  ✓ Test process terminating with exit code 0.");
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error("\n[TEST ERROR]", err);
+    process.exit(1);
+  });
