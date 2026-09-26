@@ -249,9 +249,9 @@ async function runPhase4DataSafetyTest(): Promise<void> {
       const testPort = 4010 + restartCycle;
       console.log(`  Starting API process cycle #${restartCycle} on port ${testPort}...`);
 
-      const child = spawn("npx", ["tsx", "apps/api/src/index.ts"], {
+      const tsxCli = path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs");
+      const child = spawn(process.execPath, [tsxCli, "apps/api/src/index.ts"], {
         env: { ...process.env, PORT: String(testPort) },
-        shell: true,
         stdio: "pipe",
       });
 
