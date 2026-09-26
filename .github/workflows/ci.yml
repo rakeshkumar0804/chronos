@@ -1,0 +1,76 @@
+name: CHRONOS CI & Release Candidate Verification
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-and-build:
+    name: Build, Typecheck & Deterministic Test Suites
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: chronos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/chronos?schema=public"
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Apply Database Migrations & Seed
+        run: |
+          npx prisma db push --skip-generate
+          npx prisma db seed
+
+      - name: Monorepo Typecheck
+        run: npm run typecheck
+
+      - name: Deterministic Solver Metrics Test Suite
+        run: npm run test:solver:metrics
+
+      - name: Generator & CSP Solver Test Suite
+        run: npm run test:csp
+
+      - name: Demo Benchmark Scenario Suite
+        run: npm run test:demo
+
+      - name: Offline Deterministic Parser Test Suite
+        run: npm run test:parser:deterministic
+
+      - name: Phase 1 Workspace Boundary Isolation Suite
+        run: npx tsx apps/api/src/test-phase1-workspace-boundaries.ts
+
+      - name: Phase 4 Deployment Data-Safety & Seed Isolation Suite
+        run: npx tsx apps/api/src/test-phase4-data-safety.ts
+
+      - name: Monorepo Production Build
+        run: npm run build

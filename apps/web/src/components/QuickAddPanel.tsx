@@ -95,7 +95,7 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to add faculty");
 
-      setStatusMessage({ type: "SUCCESS", text: `Faculty "${data.faculty.fullName}" created in your private workspace.` });
+      setStatusMessage({ type: "SUCCESS", text: `Faculty "${data.faculty.fullName}" created in your visitor sandbox.` });
       setFacultyForm({ shortCode: "", fullName: "", email: "" });
       onDataRefreshed();
     } catch (err: any) {
@@ -123,7 +123,7 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to add room");
 
-      setStatusMessage({ type: "SUCCESS", text: `Room "${data.room.roomNo}" created in your private workspace.` });
+      setStatusMessage({ type: "SUCCESS", text: `Room "${data.room.roomNo}" created in your visitor sandbox.` });
       setRoomForm({ roomNo: "", type: "LECTURE_ROOM", capacity: 60 });
       onDataRefreshed();
     } catch (err: any) {
@@ -155,7 +155,7 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to add course");
 
-      setStatusMessage({ type: "SUCCESS", text: `Course "${data.course.name} (${data.course.shortCode})" created in your private workspace.` });
+      setStatusMessage({ type: "SUCCESS", text: `Course "${data.course.name} (${data.course.shortCode})" created in your visitor sandbox.` });
       setCourseForm({
         code: "",
         name: "",
@@ -189,7 +189,7 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
 
       setStatusMessage({
         type: "SUCCESS",
-        text: `Reset complete. Custom entities purged from your workspace.`,
+        text: `Reset complete. Custom entities purged from your visitor sandbox.`,
       });
       onDataRefreshed();
     } catch (err: any) {
@@ -604,7 +604,7 @@ export const QuickAddPanel: React.FC<QuickAddPanelProps> = ({
               gap: "6px",
               transition: "all 0.15s ease",
             }}
-            title="Purges all custom added items and restores original seeded dataset"
+            title="Purges all custom added items from your visitor sandbox"
           >
             <RotateCcw size={12} />
             <span>RESET TO BENCHMARK DATA (PURGE CUSTOM)</span>

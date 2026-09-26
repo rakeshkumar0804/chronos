@@ -256,7 +256,7 @@ export const ConstraintStudio: React.FC<ConstraintStudioProps> = ({
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "6px",
+              justifyContent: "space-between",
               color: "#FF3B3B",
               fontSize: "11px",
               background: "rgba(255, 59, 59, 0.1)",
@@ -265,8 +265,28 @@ export const ConstraintStudio: React.FC<ConstraintStudioProps> = ({
               border: "1px solid rgba(255, 59, 59, 0.3)",
             }}
           >
-            <AlertCircle size={14} />
-            <span>{errorMsg}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <AlertCircle size={14} />
+              <span>{errorMsg}</span>
+            </div>
+            {inputText.trim() && (
+              <button
+                onClick={handleParse}
+                disabled={disabled || isParsing}
+                style={{
+                  background: "rgba(255, 59, 59, 0.2)",
+                  color: "#FF3B3B",
+                  border: "1px solid rgba(255, 59, 59, 0.4)",
+                  borderRadius: "4px",
+                  padding: "2px 8px",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                RETRY
+              </button>
+            )}
           </div>
         )}
       </div>

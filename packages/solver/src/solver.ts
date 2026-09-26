@@ -252,8 +252,9 @@ export function solve(input: SolverInput, options: SolverOptions = {}): SolverRe
           for (const c of input.constraints) {
             if (c.type === "HARD" && (c.category === "ROOM_UNAVAILABILITY" || c.category === "ROOM_UNAVAILABLE")) {
               const rule = c.structuredRule as { roomNo?: string; roomId?: string; days?: string[]; timeSlotIds?: string[]; startTimes?: string[] };
+              const matchesRoom = !rule.roomNo && !rule.roomId ? true : (rule.roomNo === room.roomNo || rule.roomId === room.id);
               if (
-                (rule.roomNo === room.roomNo || rule.roomId === room.id) &&
+                matchesRoom &&
                 (!rule.days || rule.days.includes(ts.day)) &&
                 (!rule.timeSlotIds || rule.timeSlotIds.includes(ts.id)) &&
                 (!rule.startTimes || rule.startTimes.includes(ts.startTime))
@@ -285,8 +286,9 @@ export function solve(input: SolverInput, options: SolverOptions = {}): SolverRe
             for (const c of input.constraints) {
               if (c.type === "HARD" && (c.category === "FACULTY_UNAVAILABILITY" || c.category === "FACULTY_UNAVAILABLE")) {
                 const rule = c.structuredRule as { facultyShortCode?: string; facultyId?: string; days?: string[]; timeSlotIds?: string[]; startTimes?: string[] };
+                const matchesFaculty = !rule.facultyShortCode && !rule.facultyId ? true : (rule.facultyShortCode === facCode || rule.facultyId === facId);
                 if (
-                  (rule.facultyShortCode === facCode || rule.facultyId === facId) &&
+                  matchesFaculty &&
                   (!rule.days || rule.days.includes(ts.day)) &&
                   (!rule.timeSlotIds || rule.timeSlotIds.includes(ts.id)) &&
                   (!rule.startTimes || rule.startTimes.includes(ts.startTime))
@@ -521,11 +523,18 @@ export function solve(input: SolverInput, options: SolverOptions = {}): SolverRe
   }
 
   // 5. Recursive Backtracking Search
+  let hitCap = false;
+  let hitTimeout = false;
+
   function backtrack(): boolean {
+    if (hitCap || hitTimeout) return false;
+
     if (performance.now() - startTime > timeoutMs) {
+      hitTimeout = true;
       return false;
     }
-    if (backtrackCount > maxBacktracks) {
+    if (backtrackCount >= maxBacktracks) {
+      hitCap = true;
       return false;
     }
 
@@ -543,6 +552,8 @@ export function solve(input: SolverInput, options: SolverOptions = {}): SolverRe
     const orderedValues = orderDomainValues(variable, availableValues);
 
     for (const val of orderedValues) {
+      if (hitCap || hitTimeout) return false;
+
       nodesExplored++;
       assigned.set(variable.id, val);
       logTrace("assign", variable.id, val.id, `Assigned to ${val.timeSlotDay} ${val.timeSlotStartTime}, Room ${val.roomNo}, Prof ${val.facultyShortCode}`);
@@ -555,6 +566,11 @@ export function solve(input: SolverInput, options: SolverOptions = {}): SolverRe
         if (result) {
           return true;
         }
+        if (hitCap || hitTimeout) {
+          restorePruned(fcResult.pruned);
+          assigned.delete(variable.id);
+          return false;
+        }
       } else {
         logTrace("conflict", variable.id, val.id, "Forward check domain wipeout detected");
       }
@@ -562,6 +578,12 @@ export function solve(input: SolverInput, options: SolverOptions = {}): SolverRe
       // Undo Assignment & Backtrack
       restorePruned(fcResult.pruned);
       assigned.delete(variable.id);
+
+      if (backtrackCount >= maxBacktracks) {
+        hitCap = true;
+        return false;
+      }
+
       backtrackCount++;
       logTrace("backtrack", variable.id, val.id, `Backtracking from ${val.id}`);
     }
@@ -572,11 +594,18 @@ export function solve(input: SolverInput, options: SolverOptions = {}): SolverRe
   const success = backtrack();
   const elapsed = performance.now() - startTime;
 
+  if (!hitCap && backtrackCount >= maxBacktracks) {
+    hitCap = true;
+  }
+  if (!hitTimeout && elapsed > timeoutMs) {
+    hitTimeout = true;
+  }
+
   const terminationStatus = success
     ? "NATURALLY_CONVERGED_SOLVED"
-    : backtrackCount > maxBacktracks
+    : hitCap
     ? `HIT_CAP (${maxBacktracks} max backtracks exceeded)`
-    : elapsed > timeoutMs
+    : hitTimeout
     ? `HIT_TIMEOUT (${timeoutMs}ms elapsed)`
     : "SEARCH_SPACE_EXHAUSTED";
 
@@ -588,12 +617,11 @@ export function solve(input: SolverInput, options: SolverOptions = {}): SolverRe
       assignments: [],
       stats: { nodesExplored, backtrackCount, timeMs: elapsed },
       trace,
-      failureReason:
-        elapsed > timeoutMs
-          ? `Solver reached time limit of ${timeoutMs}ms without completing search`
-          : backtrackCount > maxBacktracks
-          ? `did not find a solution within bounded search limit (${maxBacktracks} backtracks; expected characteristic of unguided search)`
-          : "Search space exhausted; no valid assignment exists satisfying all active hard constraints",
+      failureReason: hitTimeout
+        ? `Solver reached time limit of ${timeoutMs}ms without completing search`
+        : hitCap
+        ? `did not find a solution within bounded search limit (${maxBacktracks} backtracks; expected characteristic of unguided search)`
+        : "Search space exhausted; no valid assignment exists satisfying all active hard constraints",
     };
   }
 

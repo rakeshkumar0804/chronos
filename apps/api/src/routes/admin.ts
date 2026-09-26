@@ -1,25 +1,19 @@
 import { Router, Request, Response } from "express";
 import { CourseType, RoomType } from "@prisma/client";
 import { prisma, XYZ_INSTITUTE_WORKSPACE } from "../db.js";
+import { extractWorkspaceId } from "../workspace.js";
 
 const router = Router();
 
-// Helper to extract visitor workspace ID from request
-export function getRequestWorkspaceId(req: Request): string {
-  const h = (req.headers["x-workspace-id"] as string)?.trim();
-  const q = ((req.query.workspaceId || req.query.workspace) as string)?.trim();
-  const b = (req.body?.workspaceId as string)?.trim();
-
-  const candidate = h || q || b || "";
-  if (!candidate || candidate === "INSTITUTIONAL" || candidate === XYZ_INSTITUTE_WORKSPACE) {
-    return XYZ_INSTITUTE_WORKSPACE;
-  }
-  return candidate;
-}
-
 // Middleware: Strict hard protection of XYZ Institute benchmark workspace
 function enforceProtectedWorkspaceGuard(req: Request, res: Response, next: () => void) {
-  const wsId = getRequestWorkspaceId(req);
+  let wsId: string;
+  try {
+    wsId = extractWorkspaceId(req);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+
   if (wsId === XYZ_INSTITUTE_WORKSPACE || !wsId) {
     return res.status(403).json({
       success: false,
@@ -32,7 +26,7 @@ function enforceProtectedWorkspaceGuard(req: Request, res: Response, next: () =>
 // 1. POST /api/admin/faculty - Add custom faculty in visitor workspace
 router.post("/faculty", enforceProtectedWorkspaceGuard, async (req: Request, res: Response) => {
   try {
-    const workspaceId = getRequestWorkspaceId(req);
+    const workspaceId = extractWorkspaceId(req);
     const { shortCode, fullName, email } = req.body;
 
     if (!shortCode?.trim() || !fullName?.trim() || !email?.trim()) {
@@ -98,7 +92,7 @@ router.post("/faculty", enforceProtectedWorkspaceGuard, async (req: Request, res
 // 2. POST /api/admin/room - Add custom room in visitor workspace
 router.post("/room", enforceProtectedWorkspaceGuard, async (req: Request, res: Response) => {
   try {
-    const workspaceId = getRequestWorkspaceId(req);
+    const workspaceId = extractWorkspaceId(req);
     const { roomNo, type, capacity } = req.body;
 
     if (!roomNo?.trim()) {
@@ -152,7 +146,7 @@ router.post("/room", enforceProtectedWorkspaceGuard, async (req: Request, res: R
 // 3. POST /api/admin/course - Add custom course with faculty assignments in visitor workspace
 router.post("/course", enforceProtectedWorkspaceGuard, async (req: Request, res: Response) => {
   try {
-    const workspaceId = getRequestWorkspaceId(req);
+    const workspaceId = extractWorkspaceId(req);
     const { code, name, shortCode, type, weeklyHours, facultyShortCodes } = req.body;
 
     if (!code?.trim() || !name?.trim() || !shortCode?.trim()) {
@@ -262,7 +256,7 @@ router.post("/course", enforceProtectedWorkspaceGuard, async (req: Request, res:
 // 4. DELETE /api/admin/reset-custom - Delete custom entities in visitor workspace
 router.delete("/reset-custom", enforceProtectedWorkspaceGuard, async (req: Request, res: Response) => {
   try {
-    const workspaceId = getRequestWorkspaceId(req);
+    const workspaceId = extractWorkspaceId(req);
 
     // Delete custom assignments
     const deletedAssignments = await prisma.facultyCourseAssignment.deleteMany({

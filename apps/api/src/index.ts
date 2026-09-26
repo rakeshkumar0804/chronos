@@ -5,6 +5,7 @@ import { solve } from "@chronos/solver";
 import constraintsRouter from "./routes/constraints.js";
 import adminRouter from "./routes/admin.js";
 import { prisma, XYZ_INSTITUTE_WORKSPACE } from "./db.js";
+import { extractWorkspaceId } from "./workspace.js";
 
 dotenv.config();
 
@@ -41,22 +42,31 @@ app.get("/api/health", (_req: Request, res: Response) => {
 
 app.get("/api/data", async (req: Request, res: Response) => {
   try {
-    const rawWs =
-      (req.headers["x-workspace-id"] as string) ||
-      (req.query.workspaceId as string) ||
-      (req.query.workspace as string);
+    let workspaceId = XYZ_INSTITUTE_WORKSPACE;
+    try {
+      workspaceId = extractWorkspaceId(req);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
+    }
 
-    const workspaceId =
-      rawWs === "INSTITUTIONAL" || rawWs === XYZ_INSTITUTE_WORKSPACE || !rawWs
-        ? XYZ_INSTITUTE_WORKSPACE
-        : rawWs.trim();
+    const isInstitutional = workspaceId === XYZ_INSTITUTE_WORKSPACE;
 
     const [courses, faculty, facultyCourseAssignments, rooms, divisions, timeSlots] =
       await Promise.all([
         prisma.course.findMany({ where: { workspaceId }, orderBy: { code: "asc" } }),
-        prisma.faculty.findMany({ where: { workspaceId }, orderBy: { shortCode: "asc" } }),
+        prisma.faculty.findMany({
+          where: isInstitutional
+            ? { workspaceId: XYZ_INSTITUTE_WORKSPACE }
+            : { workspaceId: { in: [workspaceId, XYZ_INSTITUTE_WORKSPACE] } },
+          orderBy: { shortCode: "asc" },
+        }),
         prisma.facultyCourseAssignment.findMany({ where: { workspaceId } }),
-        prisma.room.findMany({ where: { workspaceId }, orderBy: { roomNo: "asc" } }),
+        prisma.room.findMany({
+          where: isInstitutional
+            ? { workspaceId: XYZ_INSTITUTE_WORKSPACE }
+            : { workspaceId: { in: [workspaceId, XYZ_INSTITUTE_WORKSPACE] } },
+          orderBy: { roomNo: "asc" },
+        }),
         prisma.division.findMany({ orderBy: { name: "asc" } }),
         prisma.timeSlot.findMany({ orderBy: [{ day: "asc" }, { startTime: "asc" }] }),
       ]);
@@ -70,32 +80,47 @@ app.get("/api/data", async (req: Request, res: Response) => {
       timeSlots,
     });
   } catch (error: any) {
-    console.error("[CHRONOS API] Failed to fetch institutional data:", error);
-    res.status(500).json({ error: "Failed to fetch institutional data" });
+    console.error("[CHRONOS API] Failed to fetch data:", error);
+    res.status(500).json({ error: "Failed to fetch data" });
   }
 });
 
 app.post("/api/solve", async (req: Request, res: Response) => {
   try {
     const { enableTrace = false } = req.body || {};
-    const rawWs =
-      (req.headers["x-workspace-id"] as string) ||
-      (req.body?.workspaceId as string);
+    let workspaceId = XYZ_INSTITUTE_WORKSPACE;
+    try {
+      workspaceId = extractWorkspaceId(req);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
+    }
 
-    const workspaceId =
-      rawWs === "INSTITUTIONAL" || rawWs === XYZ_INSTITUTE_WORKSPACE || !rawWs
-        ? XYZ_INSTITUTE_WORKSPACE
-        : rawWs.trim();
+    const isInstitutional = workspaceId === XYZ_INSTITUTE_WORKSPACE;
 
     const [courses, faculty, facultyCourseAssignments, rooms, divisions, timeSlots] =
       await Promise.all([
         prisma.course.findMany({ where: { workspaceId } }),
-        prisma.faculty.findMany({ where: { workspaceId } }),
+        prisma.faculty.findMany({
+          where: isInstitutional
+            ? { workspaceId: XYZ_INSTITUTE_WORKSPACE }
+            : { workspaceId: { in: [workspaceId, XYZ_INSTITUTE_WORKSPACE] } },
+        }),
         prisma.facultyCourseAssignment.findMany({ where: { workspaceId } }),
-        prisma.room.findMany({ where: { workspaceId } }),
+        prisma.room.findMany({
+          where: isInstitutional
+            ? { workspaceId: XYZ_INSTITUTE_WORKSPACE }
+            : { workspaceId: { in: [workspaceId, XYZ_INSTITUTE_WORKSPACE] } },
+        }),
         prisma.division.findMany(),
         prisma.timeSlot.findMany(),
       ]);
+
+    if (courses.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Workspace "${workspaceId}" currently has 0 courses. Add courses before running the solver.`,
+      });
+    }
 
     const result = solve(
       {
@@ -116,8 +141,10 @@ app.post("/api/solve", async (req: Request, res: Response) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`[CHRONOS API] Server initialized on http://localhost:${port}`);
-});
+if (process.env.NODE_ENV !== "test") {
+  app.listen(port, () => {
+    console.log(`[CHRONOS API] Server initialized on http://localhost:${port}`);
+  });
+}
 
 export default app;

@@ -37,7 +37,7 @@ A fair question: ChatGPT, Claude, or Gemini can already produce a timetable if y
 
 **Because an LLM can't guarantee correctness — it can only guarantee plausibility.** Ask an LLM to schedule 46 sessions across 12 faculty, 4 rooms, and 6 days, and it will produce something that *looks* like a valid timetable. It has no mechanism to formally verify that no faculty member is double-booked, no room is double-booked, and every hard constraint holds simultaneously across all 46 assignments — it's pattern-matching against what a timetable typically looks like, not proving correctness. At this project's scale, verifying that by hand is tedious. At real-institution scale (hundreds of courses), it's practically impossible to eyeball, and an LLM's context window and consistency degrade well before then.
 
-This project's own benchmark data makes the point concretely: an **unguided search** (the "Chronological / Naive" mode — evaluate options in whatever order they come, no lookahead) is a reasonable proxy for how an LLM would approach the same problem — no systematic strategy for which choice to make first, no formal backtracking guarantee. On this dataset, that approach doesn't find a solution even when given a budget of **10,000,000 backtracks** (recorded run: ~98s). The MRV+LCV-guided solver finds a fully valid one in **46 steps, zero mistakes.**
+This project's benchmark compares an unguided search strategy (Chronological mode — evaluates variables in a fixed sequence without constraint-aware lookahead) against CHRONOS's guided strategy (MRV + LCV with forward checking). On this dataset, the unguided chronological search does not find a solution even when given an offline budget of 10,000,000 backtracks (historical recorded run: ~98.4s, 10,001,246 nodes explored). The MRV+LCV-guided solver finds a fully valid solution in 46 search tree nodes with zero backtracks.
 
 A CSP solver is deterministic: if a solution exists, it is guaranteed to find one (given enough search budget), and if none exists, it can say so with confidence — not "here's my best guess." An LLM offers neither guarantee. That's the actual case for writing this instead of prompting a chatbot.
 
@@ -45,16 +45,36 @@ Gemini is still used in this project — deliberately, for exactly the one job L
 
 ---
 
+## Metric Definitions
+
+CHRONOS tracks precise, hardware-independent solver counters for every execution run:
+
+- **Nodes Explored (`nodesExplored` / `VALUE_TRIED`):** Total candidate assignment attempts evaluated during search.
+- **Backtracks (`backtrackCount` / `BACKTRACK`):** Total decision points where the solver was forced to undo a tentative assignment after encountering a domain wipeout or hard constraint collision.
+
+---
+
 ## The Core Demo: Naive vs. Smart Search
 
-The most direct way to see what CHRONOS actually does is to load the **"Naive vs Smart Bottleneck Demo"** scenario and run it in both search modes:
+The most direct way to see CHRONOS in action is to load the **"Naive vs Smart Bottleneck Demo"** scenario in the live interactive UI:
 
-| Mode | Result | Nodes Explored | Backtracks | Time (recorded run) |
+### Live Interactive Browser Demo Metrics (`maxBacktracks = 1,000`)
+
+| Strategy | Result | Nodes Explored | Backtracks | Execution Time |
 |---|---|---|---|---|
-| **Chronological (naive ordering)** | Budget-limited — no solution found within a 10,000,000-backtrack budget | 10,001,246 | 10,001,246 | ~98.4s |
-| **MRV + LCV (smart heuristics)** | Solved — 0 constraint violations | 46 | 0 | ~75ms |
+| **Chronological (Unguided Naive)** | Bounded Search Limit Hit (`HIT_CAP`: 1,000 max backtracks reached) | **1,046** | **1,000** | **~1.6 ms** |
+| **MRV + LCV (Constraint-Guided Smart)** | Solved (`NATURALLY_CONVERGED_SOLVED`: 0 violations) | **46** | **0** | **~1.2 ms** |
 
-*(The live browser demo uses a smaller backtrack budget for UI responsiveness so it stays interactive — the numbers above are from a separate, full offline verification run testing whether the naive search converges at all given a much larger budget. Timings are from that recorded run, not guarantees.)*
+*(In the live browser UI, Naive Chronological mode is configured with a responsive search budget of `maxBacktracks = 1000`. Once 1,000 backtracks are unwound, the search halts immediately and returns `HIT_CAP`.)*
+
+### Historical Uncapped Benchmark Evidence (August 2026 Offline Run)
+
+| Strategy | Result | Nodes Explored | Backtracks | Machine Execution Time |
+|---|---|---|---|---|
+| **Chronological (Unguided Naive Uncapped)** | Bounded Search Limit Hit (`HIT_CAP`: 10,000,000 max backtracks limit) | 10,001,246 | 10,001,246 | ~98.4s *(machine-specific historical benchmark)* |
+| **MRV + LCV (Constraint-Guided Smart)** | Solved (`NATURALLY_CONVERGED_SOLVED`: 0 violations) | 46 | 0 | ~75ms *(machine-specific)* |
+
+*(The historical uncapped run demonstrates that unguided chronological search fails to converge on this bottleneck dataset even when granted an offline budget of 10 million backtracks.)*
 
 Same problem. Same 46 required sessions. Same hard constraints (two faculty on partial leave, a blocked time slot, a daily course-repeat limit). The only difference is *which variable the solver picks next* when it has a choice.
 
@@ -149,11 +169,11 @@ Before this constraint is accepted, it's validated against the real database —
 
 ## Quick Add: Feeding It Different Data
 
-The solver isn't hardcoded to this one dataset — it reads whatever Courses, Faculty, and Rooms exist in the database and solves for that. A **Quick Add** panel lets new entities be added directly from the UI:
+The solver isn't hardcoded to this one dataset — it reads whatever Courses, Faculty, and Rooms exist in the database and solves for that. A **Quick Add** panel lets new entities be added directly from the UI into a client-partitioned **Visitor Sandbox**:
 
 - Add a single Faculty, Room, or Course (with multi-select for co-teaching — several courses in the seeded dataset, like the lab sections, are already taught by two instructors, so this had to be supported from the start)
-- **Bulk Import** accepts multiple entities pasted at once in a simple line-based format, so a larger set of new data doesn't mean filling out a form one entry at a time
-- A **Reset to Benchmark Data** action clears anything added this way, restoring the original 46-session dataset
+- **Visitor Sandbox Partitioning (Trust Boundary):** Injected entities are partitioned using an unauthenticated visitor workspace ID (`ws-<uuid>`) stored in `localStorage`. This partition prevents accidental UI collisions between anonymous visitors, but is explicitly NOT an authorization or privacy boundary: any caller who knows a workspace ID can query or mutate that sandbox. The official XYZ Institute benchmark dataset (`xyz-institute-demo`) is protected by database/Prisma middleware guards against public mutation or reset.
+- A **Reset to Benchmark Data** action clears custom entities belonging to the visitor's sandbox, leaving the official 46-session institutional dataset and other visitor sessions intact.
 
 This means the demo isn't limited to the one seeded timetable — new courses, faculty, or rooms typed in live get picked up by the same solver, same heuristics, no code changes required.
 
@@ -183,12 +203,16 @@ GEMINI_API_KEY=your_key_here   # free tier at aistudio.google.com
 npm run dev
 ```
 
+> [!NOTE]
+> **Production Deployment & Data Safety:**
+> Container startup (in Dockerfile and `apps/api/Dockerfile`) is strictly non-destructive (`CMD ["npx", "tsx", "apps/api/src/index.ts"]`). Database migrations (`npx prisma db push`) and initial benchmark seeding (`npm run db:seed`) are explicit, one-time deployment steps. Seeding is scoped strictly to the institutional benchmark (`xyz-institute-demo`) and upserts shared records, ensuring visitor sandbox data is preserved across container restarts.
+
 ---
 
 ## What's Not in Scope (Yet)
 
+- Authenticated user accounts & persistent cross-device management (the workspace feature is an unauthenticated client-partitioned visitor sandbox; authenticated multi-tenant accounts with cross-device sync are out of scope)
 - Soft-constraint optimization (preferences are parsed and stored but not yet weighted into the objective function — the solver currently optimizes for feasibility, not for things like spreading sessions evenly across the week)
-- Per-visitor isolated workspaces (a fully separate scheduling instance per user, so a visitor's Quick Add data never mixes with the demo dataset) — attempted, but data-isolation bugs surfaced faster than they could be reliably fixed, so this was rolled back in favor of protecting the verified core solver and benchmark data. The solver's data layer is already workspace-agnostic by design, so this is a scoped addition for later, not an architectural rewrite.
 - A second search strategy beyond backtracking (e.g., simulated annealing) for much larger instances
 
 ---

@@ -33,6 +33,16 @@ function postOut(msg: WorkerOutMessage) {
   self.postMessage(msg);
 }
 
+function trackEventMetrics(event: SolverStepEvent, metrics: SolverStats) {
+  if (event.type === "VALUE_TRIED") {
+    metrics.nodesExplored++;
+  } else if (event.type === "BACKTRACK") {
+    metrics.backtrackCount++;
+  } else if (event.type === "DOMAIN_PRUNED") {
+    metrics.domainsPruned = (metrics.domainsPruned || 0) + 1;
+  }
+}
+
 function processStep(): boolean {
   if (!currentGenerator) return false;
 
@@ -65,13 +75,7 @@ function processStep(): boolean {
     }
 
     const event = next.value;
-    if (event.type === "VARIABLE_SELECTED") {
-      currentMetrics.nodesExplored++;
-    } else if (event.type === "BACKTRACK") {
-      currentMetrics.backtrackCount++;
-    } else if (event.type === "DOMAIN_PRUNED") {
-      currentMetrics.domainsPruned = (currentMetrics.domainsPruned || 0) + 1;
-    }
+    trackEventMetrics(event, currentMetrics);
 
     postOut({
       type: "BATCH_EVENTS",
@@ -131,7 +135,9 @@ function runLoop() {
         return;
       }
 
-      batch.push(next.value);
+      const event = next.value;
+      trackEventMetrics(event, currentMetrics);
+      batch.push(event);
       chunkCount++;
     }
 
@@ -195,13 +201,7 @@ function runLoop() {
       }
 
       const event = next.value;
-      if (event.type === "VARIABLE_SELECTED") {
-        currentMetrics.nodesExplored++;
-      } else if (event.type === "BACKTRACK") {
-        currentMetrics.backtrackCount++;
-      } else if (event.type === "DOMAIN_PRUNED") {
-        currentMetrics.domainsPruned = (currentMetrics.domainsPruned || 0) + 1;
-      }
+      trackEventMetrics(event, currentMetrics);
       batch.push(event);
     }
 

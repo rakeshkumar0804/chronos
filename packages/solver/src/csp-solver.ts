@@ -437,10 +437,20 @@ export function* solveCSP(
   }
 
   // 8. Recursive Generator Traversal
+  let hitCap = false;
+  let hitTimeout = false;
+
   function* backtrackGenerator(depth: number): Generator<SolverStepEvent, boolean, void> {
     if (depth > maxDepth) maxDepth = depth;
 
-    if (performance.now() - startTime > timeoutMs || backtrackCount > maxBacktracks) {
+    if (hitCap || hitTimeout) return false;
+
+    if (performance.now() - startTime > timeoutMs) {
+      hitTimeout = true;
+      return false;
+    }
+    if (backtrackCount >= maxBacktracks) {
+      hitCap = true;
       return false;
     }
 
@@ -464,6 +474,8 @@ export function* solveCSP(
     const orderedValues = orderDomainValues(variable, availableValues);
 
     for (const val of orderedValues) {
+      if (hitCap || hitTimeout) return false;
+
       nodesExplored++;
       assigned.set(variable.id, val);
 
@@ -497,6 +509,11 @@ export function* solveCSP(
         if (solved) {
           return true;
         }
+        if (hitCap || hitTimeout) {
+          restorePruned(fcResult.pruned);
+          assigned.delete(variable.id);
+          return false;
+        }
       } else {
         yield {
           type: "CONFLICT_DETECTED",
@@ -509,6 +526,12 @@ export function* solveCSP(
       // Backtrack
       restorePruned(fcResult.pruned);
       assigned.delete(variable.id);
+
+      if (backtrackCount >= maxBacktracks) {
+        hitCap = true;
+        return false;
+      }
+
       backtrackCount++;
 
       yield {
@@ -523,6 +546,13 @@ export function* solveCSP(
 
   const success = yield* backtrackGenerator(0);
   const elapsed = performance.now() - startTime;
+
+  if (!hitCap && backtrackCount >= maxBacktracks) {
+    hitCap = true;
+  }
+  if (!hitTimeout && elapsed > timeoutMs) {
+    hitTimeout = true;
+  }
 
   const metrics: SolverStats = {
     nodesExplored,
@@ -542,12 +572,11 @@ export function* solveCSP(
       success: false,
       assignments: [],
       stats: metrics,
-      failureReason:
-        elapsed > timeoutMs
-          ? `Solver reached time limit of ${timeoutMs}ms without completing search`
-          : backtrackCount > maxBacktracks
-          ? `Search limit reached (${maxBacktracks} backtracks)`
-          : "Search space exhausted; no valid assignment exists satisfying all active hard constraints",
+      failureReason: hitTimeout
+        ? `Solver reached time limit of ${timeoutMs}ms without completing search`
+        : hitCap
+        ? `Search limit reached (${maxBacktracks} backtracks)`
+        : "Search space exhausted; no valid assignment exists satisfying all active hard constraints",
     };
   }
 

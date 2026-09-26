@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test:run": "tsx src/test-run.ts",
     "test:csp": "tsx src/test-csp-solver.ts",
+    "test:metrics": "tsx src/test-phase2-solver-metrics.ts",
     "test:stress": "tsx src/test-stress-benchmark.ts",
     "test:stressed": "tsx src/test-run-stressed.ts",
     "test:demo": "tsx src/test-run-demo.ts",

@@ -116,35 +116,35 @@ async function main(): Promise<void> {
 
   console.log("Seeding CHRONOS database with real timetable dataset for the first time...");
 
-  // 1. Clean existing records in reverse order of foreign key dependencies
-  await prisma.scheduleEntry.deleteMany();
-  await prisma.constraint.deleteMany();
-  await prisma.facultyCourseAssignment.deleteMany();
-  await prisma.timeSlot.deleteMany();
-  await prisma.course.deleteMany();
-  await prisma.faculty.deleteMany();
-  await prisma.room.deleteMany();
-  await prisma.division.deleteMany();
-  await prisma.institute.deleteMany();
+  // 1. Clean existing benchmark records strictly scoped to XYZ_INSTITUTE_WORKSPACE
+  await prisma.scheduleEntry.deleteMany({ where: { workspaceId: XYZ_INSTITUTE_WORKSPACE } });
+  await prisma.facultyCourseAssignment.deleteMany({ where: { workspaceId: XYZ_INSTITUTE_WORKSPACE } });
+  await prisma.course.deleteMany({ where: { workspaceId: XYZ_INSTITUTE_WORKSPACE } });
+  await prisma.faculty.deleteMany({ where: { workspaceId: XYZ_INSTITUTE_WORKSPACE } });
+  await prisma.room.deleteMany({ where: { workspaceId: XYZ_INSTITUTE_WORKSPACE } });
 
-  // 2. Create Institute
-  const institute = await prisma.institute.create({
-    data: instituteData,
-  });
-  console.log(`Created Institute: ${institute.name} (${institute.id})`);
+  // 2. Create or find Institute
+  let institute = await prisma.institute.findFirst({ where: { name: instituteData.name } });
+  if (!institute) {
+    institute = await prisma.institute.create({
+      data: instituteData,
+    });
+    console.log(`Created Institute: ${institute.name} (${institute.id})`);
+  } else {
+    console.log(`Using existing Institute: ${institute.name} (${institute.id})`);
+  }
 
-  // 3. Create Divisions
+  // 3. Upsert Divisions (shared across workspaces)
   const divisions = await Promise.all(
     divisionsData.map((div) =>
-      prisma.division.create({
-        data: {
-          ...div,
-          instituteId: institute.id,
-        },
+      prisma.division.upsert({
+        where: { name: div.name },
+        update: { semester: div.semester, program: div.program, instituteId: institute.id },
+        create: { ...div, instituteId: institute.id },
       })
     )
   );
-  console.log(`Created ${divisions.length} Divisions.`);
+  console.log(`Seeded ${divisions.length} Divisions.`);
 
   // 4. Create Rooms
   const rooms = await Promise.all(
@@ -226,12 +226,23 @@ async function main(): Promise<void> {
   }
   console.log(`Created ${assignmentCount} Faculty-Course Assignments.`);
 
-  // 8. Create TimeSlots (Mon–Sat)
+  // 8. Upsert TimeSlots (shared across workspaces, Mon–Sat)
   let slotCount = 0;
   for (const day of days) {
     for (const slot of timeSlotTemplates) {
-      await prisma.timeSlot.create({
-        data: {
+      await prisma.timeSlot.upsert({
+        where: {
+          day_startTime_endTime: {
+            day,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+          },
+        },
+        update: {
+          isBreak: slot.isBreak,
+          breakLabel: slot.breakLabel,
+        },
+        create: {
           day,
           startTime: slot.startTime,
           endTime: slot.endTime,
@@ -242,7 +253,7 @@ async function main(): Promise<void> {
       slotCount++;
     }
   }
-  console.log(`Created ${slotCount} Time Slots.`);
+  console.log(`Seeded ${slotCount} Time Slots.`);
 }
 
 main()

@@ -74,12 +74,24 @@ export const App: React.FC = () => {
       });
   };
 
+  // Sandbox custom courses: strictly the visitor's courses
+  const sandboxCourses = useMemo(() => {
+    return dataset.courses.filter(
+      (c: any) => c.workspaceId === visitorWsId || (c.isCustom && c.workspaceId !== XYZ_INSTITUTE_WORKSPACE)
+    );
+  }, [dataset.courses, visitorWsId]);
+
+  const sandboxVariables = useMemo(() => {
+    const hours = sandboxCourses.reduce((acc: number, c: { weeklyHours: number }) => acc + c.weeklyHours, 0);
+    return hours * (dataset.divisions?.length || 2);
+  }, [sandboxCourses, dataset.divisions]);
+
   // Re-fetch and reset tree when active workspace changes
   useEffect(() => {
     const rootName =
       workspace === "INSTITUTIONAL"
         ? "XYZ Institute CSP Root (46 Sessions)"
-        : `My Workspace CSP Root (${activeDataset.courses.length} Courses, ${totalVariables} Sessions)`;
+        : `Visitor Sandbox CSP Root (${sandboxCourses.length} Courses, ${sandboxVariables} Sessions)`;
     reset(rootName);
     fetchData(workspace);
   }, [workspace]);
@@ -106,9 +118,7 @@ export const App: React.FC = () => {
     }
 
     // STRICT ISOLATION FOR VISITOR WORKSPACE
-    const customCourses = dataset.courses.filter(
-      (c: any) => c.workspaceId === visitorWsId || (c.isCustom && c.workspaceId !== XYZ_INSTITUTE_WORKSPACE)
-    );
+    const customCourses = sandboxCourses;
     const customCourseIds = new Set(customCourses.map((c: any) => c.id));
 
     const customAssignments = dataset.facultyCourseAssignments.filter(
@@ -132,7 +142,7 @@ export const App: React.FC = () => {
       divisions: dataset.divisions && dataset.divisions.length > 0 ? dataset.divisions : FALLBACK_DATASET.divisions,
       timeSlots: dataset.timeSlots && dataset.timeSlots.length > 0 ? dataset.timeSlots : FALLBACK_DATASET.timeSlots,
     };
-  }, [dataset, workspace, visitorWsId]);
+  }, [dataset, workspace, visitorWsId, sandboxCourses]);
 
   const totalVariables = useMemo(() => {
     const totalWeeklyHours = activeDataset.courses.reduce((acc: number, c: { weeklyHours: number }) => acc + c.weeklyHours, 0);
@@ -157,14 +167,14 @@ export const App: React.FC = () => {
 
   const handleStartSolve = () => {
     if (activeDataset.courses.length === 0) {
-      alert("Your Private Workspace currently has 0 courses! Use the '+ COURSE' panel on the right to inject courses before running the solver.");
+      alert("Your visitor sandbox currently has 0 courses! Use the '+ COURSE' panel on the right to inject courses before running the solver.");
       return;
     }
 
     const rootName =
       workspace === "INSTITUTIONAL"
         ? "XYZ Institute CSP Root (46 Sessions)"
-        : `My Workspace CSP Root (${activeDataset.courses.length} Courses, ${totalVariables} Sessions)`;
+        : `Visitor Sandbox CSP Root (${activeDataset.courses.length} Courses, ${totalVariables} Sessions)`;
 
     const problem: SolverInput = {
       ...activeDataset,
@@ -207,6 +217,9 @@ export const App: React.FC = () => {
         fontFamily: "'JetBrains Mono', 'IBM Plex Mono', monospace",
         display: "flex",
         flexDirection: "column",
+        overflowX: "hidden",
+        maxWidth: "100vw",
+        boxSizing: "border-box",
       }}
     >
       {/* Top Laboratory Header Bar */}
@@ -319,11 +332,11 @@ export const App: React.FC = () => {
                 gap: "5px",
                 transition: "all 0.15s ease",
               }}
-              title={`Private isolated sandbox (${visitorWsId}) containing your custom injected entities`}
+              title={`Visitor sandbox (${visitorWsId}) containing your custom injected entities (unauthenticated client partition)`}
             >
-              <span>🧪 MY WORKSPACE</span>
+              <span>🧪 VISITOR SANDBOX</span>
               <span style={{ fontSize: "9px", background: "rgba(57, 255, 136, 0.15)", padding: "1px 4px", borderRadius: "3px" }}>
-                {totalVariables} SESSIONS
+                {sandboxVariables} SESSIONS
               </span>
             </button>
           </div>
@@ -376,7 +389,7 @@ export const App: React.FC = () => {
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span style={{ color: "#39FF88", fontWeight: 700 }}>● TARGET WORKSPACE:</span>
             <span style={{ color: "#EEF8F1", fontWeight: 800, letterSpacing: "0.02em" }}>
-              {workspace === "INSTITUTIONAL" ? "🏛️ XYZ INSTITUTE (PROTECTED BENCHMARK)" : `🧪 MY PRIVATE WORKSPACE (${visitorWsId})`}
+              {workspace === "INSTITUTIONAL" ? "🏛️ XYZ INSTITUTE (PROTECTED BENCHMARK)" : `🧪 VISITOR SANDBOX (${visitorWsId})`}
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "16px", fontSize: "10px" }}>
@@ -387,7 +400,7 @@ export const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Warning if My Workspace is empty */}
+        {/* Warning if Visitor Sandbox is empty */}
         {workspace === "CUSTOM" && activeDataset.courses.length === 0 && (
           <div
             style={{
@@ -405,7 +418,7 @@ export const App: React.FC = () => {
           >
             <AlertTriangle size={16} />
             <span>
-              MY WORKSPACE HAS 0 COURSES INJECTED (0 SESSIONS). Use the <strong>+ COURSE</strong> panel on the right to inject courses, then click <strong>START CSP SOLVER</strong>.
+              VISITOR SANDBOX HAS 0 COURSES INJECTED (0 SESSIONS). Use the <strong>+ COURSE</strong> panel on the right to inject courses, then click <strong>START CSP SOLVER</strong>.
             </span>
           </div>
         )}
@@ -484,7 +497,7 @@ export const App: React.FC = () => {
             const rootName =
               workspace === "INSTITUTIONAL"
                 ? "XYZ Institute CSP Root (46 Sessions)"
-                : `My Workspace CSP Root (${activeDataset.courses.length} Courses, ${totalVariables} Sessions)`;
+                : `Visitor Sandbox CSP Root (${activeDataset.courses.length} Courses, ${totalVariables} Sessions)`;
             reset(rootName);
           }}
           onSpeedChange={setSpeed}
@@ -495,7 +508,7 @@ export const App: React.FC = () => {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 420px",
+            gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
             gap: "14px",
             flex: 1,
             minHeight: "600px",

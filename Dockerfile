@@ -24,5 +24,5 @@ RUN npm run build --workspace=@chronos/api
 
 EXPOSE 4000
 
-# Push schema to Neon, seed institutional data, and start API server
-CMD ["sh", "-c", "npx prisma db push --force-reset && npx tsx prisma/seed.ts && npx tsx apps/api/src/index.ts"]
+# Start CHRONOS API server (schema migration and seeding are separate deployment steps)
+CMD ["npx", "tsx", "apps/api/src/index.ts"]

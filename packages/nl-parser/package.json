@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tsc",
     "test:parser": "tsx src/test-parser.ts",
+    "test:deterministic": "tsx src/test-deterministic.ts",
     "test:live": "tsx src/test-live-gemini.ts",
     "typecheck": "tsc --noEmit"
   },
