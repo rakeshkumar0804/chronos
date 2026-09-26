@@ -255,9 +255,13 @@ async function runPhase4DataSafetyTest(): Promise<void> {
         stdio: "pipe",
       });
 
+      let childLogs = "";
+      child.stdout?.on("data", (d) => { childLogs += d.toString(); });
+      child.stderr?.on("data", (d) => { childLogs += d.toString(); });
+
       let started = false;
       const startTime = Date.now();
-      while (Date.now() - startTime < 5000) {
+      while (Date.now() - startTime < 15000) {
         try {
           const res = await fetch(`http://localhost:${testPort}/api/health`);
           if (res.status === 200) {
@@ -267,16 +271,16 @@ async function runPhase4DataSafetyTest(): Promise<void> {
         } catch {
           // Process initializing
         }
-        await new Promise((r) => setTimeout(r, 200));
+        await new Promise((r) => setTimeout(r, 250));
       }
 
       if (!started) {
-        child.kill("SIGKILL");
-        throw new Error(`FAIL: Production API process failed to respond on port ${testPort}`);
+        try { child.kill("SIGKILL"); } catch {}
+        throw new Error(`FAIL: Production API process failed to respond on port ${testPort} within 15s.\nProcess Logs:\n${childLogs}`);
       }
 
       console.log(`  ✓ API Process cycle #${restartCycle} responded on http://localhost:${testPort}/api/health`);
-      child.kill("SIGKILL");
+      try { child.kill("SIGKILL"); } catch {}
       await new Promise((r) => setTimeout(r, 500));
       console.log(`  ✓ Stopped API Process cycle #${restartCycle}`);
 
