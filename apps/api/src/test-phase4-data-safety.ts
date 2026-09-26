@@ -251,13 +251,20 @@ async function runPhase4DataSafetyTest(): Promise<void> {
 
       const tsxCli = path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs");
       const child = spawn(process.execPath, [tsxCli, "apps/api/src/index.ts"], {
-        env: { ...process.env, PORT: String(testPort) },
+        env: { ...process.env, NODE_ENV: "production", PORT: String(testPort) },
         stdio: "pipe",
       });
 
       let childLogs = "";
       child.stdout?.on("data", (d) => { childLogs += d.toString(); });
       child.stderr?.on("data", (d) => { childLogs += d.toString(); });
+
+      let exitCode: number | null = null;
+      let exitSignal: string | null = null;
+      child.on("exit", (code, signal) => {
+        exitCode = code;
+        exitSignal = signal;
+      });
 
       let started = false;
       const startTime = Date.now();
@@ -276,7 +283,7 @@ async function runPhase4DataSafetyTest(): Promise<void> {
 
       if (!started) {
         try { child.kill("SIGKILL"); } catch {}
-        throw new Error(`FAIL: Production API process failed to respond on port ${testPort} within 15s.\nProcess Logs:\n${childLogs}`);
+        throw new Error(`FAIL: Production API process failed to respond on port ${testPort} within 15s (exitCode=${exitCode}, exitSignal=${exitSignal}).\nProcess Logs:\n${childLogs}`);
       }
 
       console.log(`  ✓ API Process cycle #${restartCycle} responded on http://localhost:${testPort}/api/health`);
