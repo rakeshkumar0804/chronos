@@ -49,7 +49,7 @@ jobs:
       - name: Apply Database Migrations & Seed
         run: |
           npx prisma db push --skip-generate
-          npx prisma db seed
+          npm run db:seed
 
       - name: Monorepo Typecheck
         run: npm run typecheck
